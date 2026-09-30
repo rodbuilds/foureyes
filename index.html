@@ -1,0 +1,1329 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Four Eyes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  --bg:#eef0f6; --panel:#ffffff; --panel2:#e3e6f0; --ink:#1b1d2c; --muted:#5d6180; --line:#cfd3e2;
+  --btn:#e3e6f0; --btnh:#d3d7e6;
+  --s1:#2f7fe0; --s2:#d9486a; --s3:#b08400; --s4:#1f9d69;
+  --disp:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --body:"Barlow","Segoe UI",system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#151829; --panel:#1f2338; --panel2:#282d47; --ink:#e9e8f2; --muted:#9a9eb9; --line:#343a5a;
+    --btn:#2b3050; --btnh:#3a4066;
+    --s1:#6fb3ff; --s2:#ff8fa3; --s3:#ffd166; --s4:#7ee0b0;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#151829; --panel:#1f2338; --panel2:#282d47; --ink:#e9e8f2; --muted:#9a9eb9; --line:#343a5a;
+  --btn:#2b3050; --btnh:#3a4066;
+  --s1:#6fb3ff; --s2:#ff8fa3; --s3:#ffd166; --s4:#7ee0b0;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 var(--body)}
+.wrap{max-width:1180px;margin:0 auto;padding:20px 20px 60px}
+header{display:flex;flex-wrap:wrap;align-items:flex-end;gap:16px 28px;margin-bottom:18px}
+h1{font:700 2.4rem/1 var(--disp);margin:0;letter-spacing:.01em}
+h1 small{display:block;font:500 1rem/1.4 var(--body);color:var(--muted);margin-top:6px;letter-spacing:0}
+.spacer{flex:1}
+.seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{border:0;border-radius:0;background:var(--panel);padding:8px 14px}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+button,select,input[type=text]{font:500 .95rem var(--body);color:var(--ink)}
+button{background:var(--btn);border:1px solid transparent;border-radius:8px;padding:7px 12px;cursor:pointer}
+button:hover{background:var(--btnh)}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--s1);outline-offset:2px}
+button:disabled{opacity:.5;cursor:not-allowed}
+#vrBtn{font:700 1.15rem var(--disp);padding:10px 22px;background:var(--ink);color:var(--bg);border-radius:10px}
+#vrBtn:hover:not(:disabled){filter:brightness(1.15)}
+.status{font-size:.9rem;color:var(--muted);max-width:60ch}
+.stage{position:relative;background:#07080f;border-radius:14px;overflow:hidden;aspect-ratio:16/8;max-height:56vh;width:100%}
+.stage canvas{display:block;width:100%;height:100%;cursor:grab;touch-action:none}
+.stage .hint{position:absolute;left:12px;bottom:10px;color:#b9bdd6;font-size:.82rem;pointer-events:none}
+.global{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:14px 0 22px}
+.global label{display:flex;gap:6px;align-items:center;color:var(--muted);font-size:.92rem;margin-left:8px}
+.slots{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,500px),1fr));gap:16px}
+.card{background:var(--panel);border-radius:12px;padding:14px 16px 16px;border-top:5px solid var(--c)}
+.card[hidden]{display:none}
+.card h2{font:700 1.5rem/1 var(--disp);margin:0 0 2px;color:var(--c)}
+.card .name{color:var(--muted);font-size:.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:1.3em}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+.row input[type=text]{flex:1;min-width:0;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:7px 10px}
+.row input[type=range]{flex:1;min-width:80px;accent-color:var(--c)}
+.row select{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px}
+.row .lbl{font-size:.85rem;color:var(--muted);min-width:52px}
+.time{font-variant-numeric:tabular-nums;font-size:.88rem;color:var(--muted);min-width:118px;text-align:right}
+.filebtn{position:relative;overflow:hidden;display:inline-block}
+.filebtn input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.on{background:var(--c)!important;color:#10121f!important}
+.card.sel{outline:3px solid var(--c);outline-offset:2px}
+.pad{display:grid;grid-template-columns:max-content 1fr;gap:4px 16px;margin:8px 0}
+.pad dt{font-weight:600;color:var(--ink)}
+.pad dd{margin:0}
+#padStatus{font-size:.92rem;color:var(--muted);margin:10px 0 0}
+.err{color:var(--s2);font-size:.85rem;margin-top:8px}
+.lib{background:var(--panel);border-radius:12px;padding:14px 16px 16px;margin:0 0 22px}
+.lib h2{font:700 1.5rem/1 var(--disp);margin:0 0 4px}
+.lib p{margin:0;color:var(--muted);font-size:.9rem;max-width:80ch}
+.lib ul{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:6px}
+.lib li{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--panel2);border-radius:8px;padding:6px 8px 6px 12px}
+.lib li .n{flex:1;min-width:0;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lib li .st{font-size:.85rem;color:var(--muted)}
+.help{margin-top:28px;color:var(--muted);font-size:.92rem;max-width:75ch}
+.help h3{font:600 1.2rem var(--disp);color:var(--ink);margin:18px 0 4px}
+.help p{margin:4px 0}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Four Eyes<small>Watch up to four videos or photo slideshows side by side in VR, each with its own controls.</small></h1>
+    <div class="spacer"></div>
+    <div class="seg" role="group" aria-label="Screen layout" id="layoutSeg">
+      <button data-l="1">1 screen</button>
+      <button data-l="2" aria-pressed="true">2 screens</button>
+      <button data-l="4grid">4 grid</button>
+      <button data-l="4arc">4 wide</button>
+    </div>
+    <button id="vrBtn" disabled>Checking for VR…</button>
+  </header>
+  <div class="status" id="status"></div>
+
+  <div class="stage" style="margin-top:12px">
+    <canvas id="c"></canvas>
+    <div class="hint">Drag to look around. Click the control bars to test them.</div>
+  </div>
+
+  <p id="padStatus">No game controller detected yet. Press any button on your Xbox controller to connect it.</p>
+  <div class="global">
+    <button id="playAll">Play all</button>
+    <button id="pauseAll">Pause all</button>
+    <button id="restartAll">Restart all together</button>
+    <button id="muteAll">Mute all</button>
+    <label><input type="checkbox" id="autoHide" checked> Hide control bars in VR until you point at a screen</label>
+    <label><input type="checkbox" id="linkSize"> Same size for all screens</label>
+    <label>Each photo shows for <select id="photoSecs" aria-label="Seconds per photo in slideshows"></select></label>
+    <label><input type="checkbox" id="headCursor" checked> Head cursor (look at something, press A to click it)</label>
+  </div>
+
+  <section class="lib">
+    <h2>Media library</h2>
+    <p>Add the folders your videos are in. Then in VR, press the View button on the controller (or FILES on a screen's control bar) to browse them and pick a video without taking the headset off. The browser remembers these folders; after restarting it you may need to click Reconnect once.</p>
+    <div class="row">
+      <button id="addFolder">Add video folder…</button>
+      <button id="openBrowser">Open media browser</button>
+      <input type="file" id="dirInput" webkitdirectory multiple hidden>
+    </div>
+    <ul id="rootList"></ul>
+  </section>
+
+  <div class="slots" id="slots"></div>
+
+  <div class="help">
+    <h3>Xbox controller</h3>
+    <p>One screen is selected at a time, shown by a colored frame around it in VR and an outline on its card here. The controller acts on the selected screen. A small ring in the middle of your view is the head cursor: look at a screen to select it, look at a button and press A to click it.</p>
+    <dl class="pad">
+      <dt>A</dt><dd>Click whatever the head cursor is on (a button, a video in the media browser, or a screen to play or pause it). When the cursor is on nothing, plays or pauses the selected screen.</dd>
+      <dt>View button</dt><dd>Open or close the media browser for the selected screen</dd>
+      <dt>D-pad left / right</dt><dd>Select the previous or next screen</dd>
+      <dt>LB / RB</dt><dd>Skip back or forward 10 seconds (hold to keep skipping)</dd>
+      <dt>LT / RT</dt><dd>Skip back or forward 1 minute</dd>
+      <dt>Left stick left / right</dt><dd>Scrub back or forward 5 seconds at a time</dd>
+      <dt>D-pad up / down</dt><dd>Volume up or down</dd>
+      <dt>B</dt><dd>Mute or unmute</dd>
+      <dt>X</dt><dd>Solo this screen's sound (mutes the others)</dd>
+      <dt>Y</dt><dd>Loop on or off</dd>
+      <dt>Right stick up / down</dt><dd>Make the screen bigger or smaller</dd>
+      <dt>Menu button</dt><dd>Play or pause all screens</dd>
+      <dt>Left stick click</dt><dd>Keep control bars always visible, or let them fade</dd>
+      <dt>Right stick click</dt><dd>Show or hide the head cursor</dd>
+    </dl>
+    <p>In the media browser: A opens the folder or plays the video under the head cursor, B goes back up a folder (or closes the browser), LB / RB or the D-pad turn pages. Use "Load to screen" on the left to pick which screen the video goes to, and "Format" for 3D videos (SBS = side by side, OU = over/under, ½ = half-width).</p>
+    <p>Picking a video makes the rest of its folder that screen's playlist. "When a video ends" (in the browser, or on the screen's card) chooses whether it stops, plays the next video in the folder, or plays the folder in random order. PLAY ALL and SHUFFLE at the top of the browser start the whole folder, and NEXT on a screen's control bar skips ahead.</p>
+    <p>To rearrange screens, press SWAP on one screen's control bar (its frame blinks), then look at another screen and press A, or press that screen's SWAP button, which now reads HERE. The two trade places and keep playing. Press SWAP again to cancel; it also cancels itself after 15 seconds. On the PC, use "Swap places with…" on a screen's card.</p>
+    <p>Photos: folders list your photos (JPG, PNG, WebP, GIF, AVIF, and JPS 3D photos) alongside videos. Pick one and that screen plays a slideshow of the folder's photos. Play/pause starts and stops it; "Each photo shows for" on the page, or T− / T+ on the screen's control bar (D-pad up/down on the controller), sets how long each photo stays. −10 / +10 and LB / RB go to the previous or next photo, and the seek bar jumps through the folder. The screen keeps its 3D format (SBS, OU, L⇄R) from photo to photo. JPS files switch to SBS with the eyes swapped automatically, since that's how they're stored. When a slideshow reaches the last photo it stops, unless LOOP is on; SHUFFLE plays the photos in random order.</p>
+    <p>If the picture freezes while the sound keeps going: Chrome pauses video pictures when it thinks the page is hidden. Don't minimize the Chrome window or cover it completely with another window while you're in VR.</p>
+    <p>Before putting the headset on, click once on this page so the browser window has focus, otherwise the browser may not receive controller input. The Xbox button still opens the Oculus menu.</p>
+    <h3>Using it with a Rift</h3>
+    <p>Open this page in Chrome or Edge on the PC the Rift is plugged into, with the Oculus app running. Load your normal videos (MP4, WebM and so on) here first (file pickers can't open inside the headset), then press Enter VR.</p>
+    <p>If you use Touch controllers instead, point one and pull the trigger. Trigger on a screen plays or pauses it. The bar under each screen has skip back and forward, a seek bar, mute, volume, solo (mutes the others), size, and loop. While pointing at a screen, the thumbstick left and right skips 10 seconds and up and down changes volume.</p>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(() => {
+const SLOT_COLORS_DARK = ['#6fb3ff','#ff8fa3','#ffd166','#7ee0b0'];
+const R = 3.0; // distance of screens from you, meters
+// rows of slot indices, left to right; positions are worked out from the screens' actual sizes (see arrange)
+const LAYOUTS = {
+  '1':    {rows:[[0]],       w:2.8,  y:1.6},
+  '2':    {rows:[[0,1]],     w:2.0,  y:1.6},
+  '4grid':{rows:[[0,1],[2,3]],w:1.5, y:1.65},
+  '4arc': {rows:[[0,1,2,3]], w:1.35, h:1.9, y:1.5} // tall box: slim portrait videos get full height
+};
+let layout = '2';
+let linkSize = false, needArrange = true;
+const PHOTO_STEPS = [1,2,3,4,5,7,10,15,20,30,45,60,120];
+let photoSecs = 5; // how long each photo in a slideshow stays up, shared by every screen
+const slotAt = [0,1,2,3]; // layout position -> slot index; swapping screens swaps entries here
+let swapFrom = null, swapUntil = 0; // screen picked as the first half of a swap
+let eyeY = 1.6, measureEyeAt = 0; // your eye height above the floor, measured when you enter VR
+let autoHide = true;
+const statusEl = document.getElementById('status');
+const setStatus = t => statusEl.textContent = t || '';
+
+// ---------- three.js setup ----------
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.xr.enabled = true;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x07080f);
+const world = new THREE.Group(); scene.add(world);
+const camera = new THREE.PerspectiveCamera(75, 2, 0.05, 100);
+camera.position.set(0,1.6,0);
+camera.layers.enable(1); // desktop preview shows left eye of 3D videos
+
+// floor
+const floor = new THREE.Mesh(new THREE.CircleGeometry(7,64), new THREE.MeshBasicMaterial({color:0x10131f}));
+floor.rotation.x = -Math.PI/2; world.add(floor);
+const grid = new THREE.PolarGridHelper(7, 16, 8, 64, 0x1d2238, 0x1d2238); world.add(grid);
+
+function resize(){
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if (!w || !h || renderer.xr.isPresenting) return;
+  renderer.setSize(w,h,false); camera.aspect = w/h; camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(canvas);
+
+// desktop look-around
+let yaw=0, pitch=0, dragging=false, moved=0, lx=0, ly=0;
+canvas.addEventListener('pointerdown', e=>{dragging=true;moved=0;lx=e.clientX;ly=e.clientY;canvas.setPointerCapture(e.pointerId);});
+canvas.addEventListener('pointermove', e=>{
+  updateMouse(e);
+  if(!dragging) return;
+  const dx=e.clientX-lx, dy=e.clientY-ly; moved+=Math.abs(dx)+Math.abs(dy); lx=e.clientX; ly=e.clientY;
+  yaw += dx*0.004; pitch = Math.max(-1.2,Math.min(1.2,pitch+dy*0.004));
+  camera.rotation.set(pitch,yaw,0,'YXZ');
+});
+canvas.addEventListener('pointerup', e=>{
+  dragging=false;
+  if(moved<6){ updateMouse(e); const hit = raycastFrom(mouseRay); if(hit) activate(hit); }
+});
+canvas.addEventListener('pointerleave', ()=>{ mouseActive=false; });
+const mouseRay = new THREE.Raycaster(); let mouseActive=false;
+function updateMouse(e){
+  const r = canvas.getBoundingClientRect();
+  const v = new THREE.Vector2(((e.clientX-r.left)/r.width)*2-1, -((e.clientY-r.top)/r.height)*2+1);
+  mouseRay.setFromCamera(v,camera); mouseActive=true;
+}
+
+// ---------- helpers ----------
+const fmt = s => { if(!isFinite(s)) return '0:00'; s=Math.max(0,Math.floor(s)); const h=Math.floor(s/3600), m=Math.floor(s%3600/60), x=s%60;
+  return (h? h+':'+String(m).padStart(2,'0') : m)+':'+String(x).padStart(2,'0'); };
+const BASE_UV = [0,1, 1,1, 0,0, 1,0];
+function setUV(geo,u0,u1,v0,v1){
+  const uv = geo.attributes.uv;
+  for(let i=0;i<4;i++) uv.setXY(i, u0+BASE_UV[i*2]*(u1-u0), v0+BASE_UV[i*2+1]*(v1-v0));
+  uv.needsUpdate = true;
+}
+
+// control bar geometry (canvas pixels, 1400x128)
+const BW=1500, BH=128;
+const SEEK = {x0:470, x1:850};
+const BUTTONS = [
+  {id:'open', x:10,  w:92, label:'FILES'},
+  {id:'back', x:105, w:80, label:'−10'},
+  {id:'play', x:190, w:90, label:'▶'},
+  {id:'fwd',  x:285, w:80, label:'+10'},
+  {id:'next', x:370, w:84, label:'NEXT'},
+  {id:'mute', x:865, w:80, label:'MUTE'},
+  {id:'vdn',  x:950, w:60, label:'V−'},
+  {id:'vup',  x:1015,w:60, label:'V+'},
+  {id:'solo', x:1080,w:75, label:'SOLO'},
+  {id:'sdn',  x:1165,w:60, label:'S−'},
+  {id:'sup',  x:1230,w:60, label:'S+'},
+  {id:'loop', x:1295,w:68, label:'LOOP'},
+  {id:'swap', x:1368,w:84, label:'SWAP'}
+];
+// videos are kept in the page (tiny and invisible) rather than detached; Chrome is more willing
+// to throttle or suspend decoding of media elements that aren't in the document
+const videoHost=document.createElement('div');
+videoHost.style.cssText='position:fixed;left:0;bottom:0;width:2px;height:2px;overflow:hidden;opacity:0.01;pointer-events:none;z-index:-1';
+document.body.appendChild(videoHost);
+const shuffled=n=>{ const a=[...Array(n).keys()]; for(let i=n-1;i>0;i--){ const j=Math.random()*(i+1)|0; [a[i],a[j]]=[a[j],a[i]]; } return a; };
+function rr(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+
+// ---------- Slot ----------
+class Slot{
+  constructor(i){
+    this.i=i; this.color=SLOT_COLORS_DARK[i];
+    this.mode='2d'; this.swap=false; this.scale=1; this.baseW=2; this.baseH=2*9/16; this.loaded=false; this.name='';
+    this.lastHover=0; this.hoverBtn=null; this.hoverSeek=null; this.barDirty=true; this.lastDraw=0;
+    this.sort='az'; // this screen's folder sort in the media browser
+    this.photo=null; this.slidePlaying=false; this.slideNext=0; this.photoTok=0; this.pre=null; // slideshow state
+    this.list=null; this.order=null; this.pos=0; this.endMode='next'; // playlist: the folder the video came from
+    this.lastT=-1; this.stallT=-1; this.stallSince=0;
+    const v = this.video = document.createElement('video');
+    v.playsInline=true; v.preload='auto'; v.crossOrigin='anonymous'; v.width=2; v.height=2;
+    videoHost.appendChild(v);
+
+    // placeholder
+    const pc=document.createElement('canvas'); pc.width=640; pc.height=360; const p=pc.getContext('2d');
+    p.fillStyle='#161a2c'; p.fillRect(0,0,640,360); p.strokeStyle=this.color; p.lineWidth=6; p.strokeRect(3,3,634,354);
+    p.fillStyle=this.color; p.font='700 64px "Barlow Condensed", Arial Narrow, sans-serif'; p.textAlign='center'; p.fillText('Screen '+(i+1),320,170);
+    p.fillStyle='#9a9eb9'; p.font='500 26px Barlow, Arial, sans-serif'; p.fillText('Press FILES below or the View button',320,220);
+    this.placeTex = new THREE.CanvasTexture(pc);
+
+    const mk = () => new THREE.Mesh(new THREE.PlaneGeometry(1,1), new THREE.MeshBasicMaterial({map:this.placeTex}));
+    this.mono=mk(); this.left=mk(); this.right=mk();
+    this.left.layers.set(1); this.right.layers.set(2);
+    for(const m of [this.mono,this.left,this.right]) m.userData={slot:this,kind:'screen'};
+
+    this.barCanvas=document.createElement('canvas'); this.barCanvas.width=BW; this.barCanvas.height=BH;
+    this.barTex=new THREE.CanvasTexture(this.barCanvas);
+    this.barMat=new THREE.MeshBasicMaterial({map:this.barTex,transparent:true,opacity:1,depthWrite:false});
+    this.bar=new THREE.Mesh(new THREE.PlaneGeometry(1,BH/BW), this.barMat);
+    this.bar.userData={slot:this,kind:'bar'}; this.bar.position.z=0.01;
+
+    this.frame=new THREE.Mesh(new THREE.PlaneGeometry(1,1), new THREE.MeshBasicMaterial({color:new THREE.Color(this.color)}));
+    this.frame.position.z=-0.01; this.frame.visible=false;
+    this.group=new THREE.Group(); this.group.add(this.frame,this.mono,this.left,this.right,this.bar); world.add(this.group);
+
+    v.addEventListener('loadedmetadata',()=>{
+      // plain Texture, not VideoTexture: we upload only when the video has actually moved to a new frame (see the render loop)
+      if(!this.tex){ this.tex=new THREE.Texture(v); this.tex.minFilter=THREE.LinearFilter; this.tex.magFilter=THREE.LinearFilter; this.tex.generateMipmaps=false; }
+      this.lastT=-1;
+      for(const m of [this.mono,this.left,this.right]){ m.material.map=this.tex; m.material.needsUpdate=true; }
+      this.loaded=true; this.applyMode(); this.err(''); this.syncUI();
+      if(this.autoplay){ this.autoplay=false; this.play(); }
+    });
+    v.addEventListener('error',()=>{
+      this.err(v.src.startsWith('blob:') ? 'This file format can\'t be played by the browser. MP4 (H.264/H.265) or WebM usually work.'
+        : 'That link didn\'t load. The server has to allow cross-origin playback (CORS), and the link must point straight at a video file.');
+    });
+    for(const ev of ['play','pause','volumechange','ratechange','ended']) v.addEventListener(ev,()=>{this.barDirty=true;this.syncUI();});
+    v.addEventListener('ended',()=>{
+      if(v.loop || this.endMode==='stop' || !this.list || this.list.length<2) return;
+      if(this.endMode==='next' && this.pos>=this.order.length-1) return; // reached the end of the folder
+      this.next(1);
+    });
+    v.addEventListener('timeupdate',()=>this.syncTime());
+    this.applyMode();
+  }
+  aspect(){
+    const vw=this.photo? this.mw : this.video.videoWidth, vh=this.photo? this.mh : this.video.videoHeight;
+    if(!vw||!vh) return 16/9;
+    switch(this.mode){
+      case 'sbs': return (vw/2)/vh; case 'tb': return vw/(vh/2);
+      default: return vw/vh; // 2d, sbs-half, tb-half
+    }
+  }
+  applyMode(){
+    const st=this.mode!=='2d';
+    this.mono.visible=!st; this.left.visible=st; this.right.visible=st;
+    let L=[0,1,0,1], Rt=[0,1,0,1];
+    if(this.mode.startsWith('sbs')){L=[0,.5,0,1];Rt=[.5,1,0,1];}
+    if(this.mode.startsWith('tb')){L=[0,1,.5,1];Rt=[0,1,0,.5];}
+    if(this.swap)[L,Rt]=[Rt,L];
+    setUV(this.left.geometry,...L); setUV(this.right.geometry,...Rt);
+    this.updateSize();
+  }
+  updateSize(){
+    // fit the video inside the layout's box (16:9 unless the layout says otherwise), so a tall video
+    // is limited by the box height instead of towering over the others
+    const bw0=this.baseW*this.scale, bh0=this.baseH*this.scale, a=this.aspect();
+    const w=Math.min(bw0,bh0*a), h=w/a;
+    for(const m of [this.mono,this.left,this.right]) m.scale.set(w,h,1);
+    this.frame.scale.set(w+0.07,h+0.07,1);
+    const bw=Math.max(w,1.2); this.bar.scale.set(bw,bw,1);
+    this.bar.position.y = -h/2 - 0.03 - bw*(BH/BW)/2;
+    this.dims={w:Math.max(w+0.07,bw), h:h+0.07, bar:0.03+bw*(BH/BW)};
+    needArrange=true;
+  }
+  place(on,baseW,baseH){
+    this.group.visible=on; if(!on) return;
+    this.baseW=baseW; this.baseH=baseH; this.updateSize();
+  }
+  setScale(v){ this.scale=Math.max(0.4,Math.min(2.5,+v.toFixed(3))); this.updateSize(); this.syncUI(); }
+  // ----- playlist -----
+  setList(list,cur){ this.list=list; this.buildOrder(cur); }
+  buildOrder(cur){
+    const n=this.list.length;
+    this.order= this.endMode==='shuffle'? shuffled(n) : [...Array(n).keys()];
+    if(this.endMode==='shuffle'){ const k=this.order.indexOf(cur); [this.order[0],this.order[k]]=[this.order[k],this.order[0]]; }
+    this.pos=this.order.indexOf(cur);
+  }
+  setEndMode(m){
+    this.endMode=m; if(this.list) this.buildOrder(this.order[this.pos]);
+    this.barDirty=true; this.syncUI(); lib.dirty=true;
+  }
+  async next(d){
+    if(!this.list || !this.list.length) return;
+    const n=this.order.length; let p=this.pos+d;
+    if(p>=n){ p=0; if(this.endMode==='shuffle'){ const last=this.order[n-1]; this.order=shuffled(n); if(n>1 && this.order[0]===last) this.order.push(this.order.shift()); } }
+    if(p<0) p=n-1;
+    this.pos=p;
+    const e=this.list[this.order[p]];
+    if(e.kind==='image'){ this.curKey=e.key; lib.dirty=true; this.showPhoto(e); return; }
+    try{ const f=await getFile(e); this.autoplay=true; this.loadFile(f,true); }
+    catch(err){ this.err('Couldn\'t open '+e.name+': '+(err.message||err)); }
+  }
+  loadFile(f,keepList){
+    this.leavePhoto();
+    if(!keepList) this.list=null;
+    if(this.url) URL.revokeObjectURL(this.url);
+    this.url=URL.createObjectURL(f); this.name=f.name; this.loaded=false;
+    this.video.src=this.url; this.video.load(); this.syncUI();
+  }
+  loadURL(u){
+    this.list=null; this.name=u.split('/').pop().split('?')[0]||u; this.loaded=false;
+    this.leavePhoto();
+    this.video.crossOrigin='anonymous'; this.video.src=u; this.video.load(); this.syncUI();
+  }
+  toggle(){ if(!this.loaded) return; this.isPaused() ? this.play() : this.pause(); }
+  isPaused(){ return this.photo? !this.slidePlaying : this.video.paused; }
+  pause(){ if(this.photo){ this.slidePlaying=false; this.barDirty=true; this.syncUI(); } else this.video.pause(); }
+  // ----- photo slideshow -----
+  async showPhoto(e){
+    const tok=++this.photoTok;
+    let im=null;
+    if(this.pre && this.pre.key===e.key){ im=this.pre; this.pre=null; }
+    else { try{ im=await decodeImage(e); }catch(err){ this.err('Couldn\'t show '+e.name+': '+(err.message||err)); } }
+    if(!im){ if(this.slidePlaying && tok===this.photoTok) this.slideNext=performance.now()+1000; return; } // unreadable photo: skip it shortly
+    if(tok!==this.photoTok){ disposePhoto(im); return; }
+    if(!this.photo){ // switching from video: stop it and let go of its file
+      const v=this.video; v.pause(); v.removeAttribute('src'); v.load();
+      if(this.url){ URL.revokeObjectURL(this.url); this.url=null; }
+      this.srcUrl=null; this.sceneStart=this.sceneEnd=null;
+    }
+    if(this.cur) disposePhoto(this.cur);
+    this.cur=im; this.photo={key:e.key}; this.mw=im.w; this.mh=im.h;
+    const t=im.tex || (im.tex=photoTexture(im.bmp));
+    for(const m of [this.mono,this.left,this.right]){ m.material.map=t; m.material.needsUpdate=true; }
+    if(/\.jps$/i.test(e.name) && this.mode==='2d'){ this.mode='sbs'; this.swap=true; } // JPS is stored side by side, right eye first
+    this.name=e.name; this.loaded=true; this.applyMode(); this.err('');
+    if(this.autoplay){ this.autoplay=false; this.slidePlaying=true; }
+    this.slideNext=performance.now()+photoSecs*1000;
+    this.barDirty=true; this.syncUI(); lib.dirty=true;
+    this.prefetch();
+  }
+  // decode the next photo ahead of time, so the change is instant
+  prefetch(){
+    if(!this.list || this.endMode==='stop') return;
+    const n=this.order.length; let p=this.pos+1; if(p>=n){ if(!this.video.loop && this.endMode!=='shuffle') return; p=0; }
+    const e=this.list[this.order[p]]; if(!e || e.kind!=='image' || (this.pre&&this.pre.key===e.key)) return;
+    // decoded off the main thread, then uploaded to the GPU now rather than when it's due on screen
+    decodeImage(e).then(im=>{ if(this.pre) disposePhoto(this.pre); im.tex=photoTexture(im.bmp); this.pre={key:e.key,...im}; }).catch(()=>{});
+  }
+  // the timer ran out on the current photo
+  advancePhoto(){
+    const last=this.pos>=this.order.length-1;
+    if(this.endMode==='stop' || !this.list || this.list.length<2 || (this.endMode==='next' && last && !this.video.loop)){ this.pause(); return; }
+    this.slideNext=Infinity; // until the next photo is up
+    this.next(1);
+  }
+  jumpPhoto(frac){ if(!this.list) return; this.pos=Math.max(0,Math.min(this.order.length-1,Math.floor(frac*this.order.length))); this.next(0); }
+  photoFrac(){
+    const n=this.list? this.list.length : 1; let prog=0;
+    if(this.slidePlaying && isFinite(this.slideNext)) prog=Math.min(1,Math.max(0,1-(this.slideNext-performance.now())/(photoSecs*1000)));
+    return Math.min(1,(this.pos+prog)/n);
+  }
+  leavePhoto(){
+    if(!this.photo) return;
+    this.photo=null; this.slidePlaying=false; this.photoTok++;
+    if(this.cur){ disposePhoto(this.cur); this.cur=null; }
+    if(this.pre){ disposePhoto(this.pre); this.pre=null; }
+  }
+  play(){ if(!this.loaded) return;
+    if(this.photo){ this.slidePlaying=true; this.slideNext=performance.now()+photoSecs*1000; this.barDirty=true; this.syncUI(); return; }
+    this.video.play().catch(()=>setStatus('The browser blocked playback. Press play once on the page, then it will work in VR too.')); }
+  seek(t){ if(!this.loaded || this.photo) return; const d=this.video.duration||0; this.video.currentTime=Math.max(0,Math.min(d-0.1,t)); this.barDirty=true; }
+  vol(dv){ if(this.photo){ stepPhotoSecs(dv>0?1:-1); return; } const v=this.video; v.volume=Math.max(0,Math.min(1,+(v.volume+dv).toFixed(2))); if(v.volume>0) v.muted=false; }
+  solo(){ slots.forEach(s=>s.video.muted = s!==this); }
+  resize(f){ sizeTo(this,this.scale*f); }
+  action(id,frac){
+    const v=this.video;
+    switch(id){
+      case 'open': openBrowser(this.i); break;
+      case 'next': this.next(1); break;
+      case 'swap': if(!swapFrom) startSwap(this); else if(swapFrom===this) endSwap(); else swapScreens(swapFrom,this); break;
+      case 'play': this.toggle(); break;
+      case 'back': this.photo? this.next(-1) : this.seek(v.currentTime-10); break;
+      case 'fwd':  this.photo? this.next(1) : this.seek(v.currentTime+10); break;
+      case 'mute': v.muted=!v.muted; break;
+      case 'vdn': this.vol(-0.1); break;
+      case 'vup': this.vol(0.1); break;
+      case 'solo': this.solo(); break;
+      case 'sdn': this.resize(1/1.15); break;
+      case 'sup': this.resize(1.15); break;
+      case 'loop': v.loop=!v.loop; this.syncUI(); break;
+      case 'seek': if(this.photo) this.jumpPhoto(frac); else if(v.duration) this.seek(frac*v.duration); break;
+    }
+    this.barDirty=true;
+  }
+  hitBar(uv){
+    const x=uv.x*BW;
+    if(x>=SEEK.x0 && x<=SEEK.x1) return {id:'seek', frac:(x-SEEK.x0)/(SEEK.x1-SEEK.x0)};
+    const b=BUTTONS.find(b=>x>=b.x && x<=b.x+b.w); return b?{id:b.id}:null;
+  }
+  drawBar(){
+    const c=this.barCanvas.getContext('2d'), v=this.video;
+    c.clearRect(0,0,BW,BH);
+    c.fillStyle='rgba(14,16,28,0.92)'; rr(c,0,0,BW,BH,26); c.fill();
+    c.fillStyle=this.color; rr(c,0,0,10,BH,5); c.fill();
+    c.textAlign='center'; c.textBaseline='middle';
+    for(const b of BUTTONS){
+      let on = (b.id==='mute'&&v.muted)||(b.id==='loop'&&v.loop)||(b.id==='solo'&&!v.muted&&slots.every(s=>s===this||s.video.muted))||(b.id==='swap'&&swapFrom===this);
+      const here = b.id==='swap' && swapFrom && swapFrom!==this; // the other screens offer themselves as the swap target
+      c.globalAlpha = b.id==='next' && !(this.list&&this.list.length>1)? 0.4 : 1;
+      c.fillStyle = here? swapFrom.color : on? this.color : (this.hoverBtn===b.id? '#454b72':'#262b45');
+      rr(c,b.x+4,20,b.w-8,88,16); c.fill();
+      c.fillStyle= on||here? '#10121f':'#e9e8f2';
+      let label=b.label; if(b.id==='play') label = this.isPaused()? '▶':'❚❚'; if(here) label='HERE';
+      if(this.photo && b.id==='vdn') label='T−'; if(this.photo && b.id==='vup') label='T+'; // photo timer
+      c.font = (b.id==='play'?'700 44px':'700 30px')+' "Barlow Condensed", Arial Narrow, sans-serif';
+      c.fillText(label,b.x+b.w/2,65);
+      c.globalAlpha=1;
+    }
+    // seek
+    const d=v.duration||0, t=v.currentTime||0, f=this.photo? this.photoFrac() : d? t/d:0;
+    const ty=84, tx0=SEEK.x0+10, tx1=SEEK.x1-10;
+    c.fillStyle='#343a5a'; rr(c,tx0,ty-6,tx1-tx0,12,6); c.fill();
+    c.fillStyle=this.color; rr(c,tx0,ty-6,Math.max(12,(tx1-tx0)*f),12,6); c.fill();
+    c.beginPath(); c.arc(tx0+(tx1-tx0)*f,ty,13,0,Math.PI*2); c.fill();
+    if(this.hoverSeek!=null){ c.fillStyle='#fff'; c.fillRect(tx0+(tx1-tx0)*this.hoverSeek-2,ty-18,4,36); }
+    c.textAlign='left'; c.fillStyle='#e9e8f2'; c.font='600 28px Barlow, Arial, sans-serif';
+    let top = this.loaded ? fmt(this.hoverSeek!=null&&d? this.hoverSeek*d : t)+' / '+fmt(d) : 'Screen '+(this.i+1)+': no video';
+    if(this.photo) top='Photo '+(this.pos+1)+' / '+(this.list? this.list.length : 1);
+    c.fillText(top,tx0,40);
+    c.textAlign='right'; c.fillStyle='#9a9eb9'; c.font='500 24px Barlow, Arial, sans-serif';
+    const pl=this.list&&this.list.length>1? (this.pos+1)+'/'+this.list.length+(this.endMode==='shuffle'?' shuffle':this.endMode==='next'?' next':'')+'  ' : '';
+    c.fillText(this.photo? pl+photoSecs+'s each' : pl+'vol '+Math.round(v.volume*100)+(v.playbackRate!==1?'  ×'+v.playbackRate:''),tx1,40);
+    this.barTex.needsUpdate=true; this.barDirty=false; this.lastDraw=performance.now();
+  }
+  // ----- desktop card -----
+  buildCard(){
+    const el=document.createElement('section'); el.className='card'; el.style.setProperty('--c',`var(--s${this.i+1})`);
+    el.innerHTML=`
+      <h2>Screen ${this.i+1}</h2>
+      <div class="name" data-r="name">No video loaded</div>
+      <div class="row">
+        <span class="filebtn"><button tabindex="-1">Open video file(s)…</button><input type="file" multiple accept="video/*,.mkv" aria-label="Open video files for screen ${this.i+1}"></span>
+        <input type="text" placeholder="…or paste a direct video link" data-r="url" aria-label="Video link">
+        <button data-r="loadurl">Load link</button>
+      </div>
+      <div class="row">
+        <button data-a="back" aria-label="Back 10 seconds">−10s</button>
+        <button data-a="play" data-r="play">Play</button>
+        <button data-a="fwd" aria-label="Forward 10 seconds">+10s</button>
+        <input type="range" min="0" max="1000" value="0" data-r="seek" aria-label="Seek">
+        <span class="time" data-r="time">0:00 / 0:00</span>
+      </div>
+      <div class="row">
+        <span class="lbl">Volume</span><input type="range" min="0" max="100" value="100" data-r="vol" aria-label="Volume">
+        <button data-a="mute" data-r="mute">Mute</button>
+        <button data-a="solo">Solo</button>
+        <button data-a="loop" data-r="loop">Loop</button>
+      </div>
+      <div class="row">
+        <span class="lbl">Speed</span>
+        <select data-r="rate" aria-label="Playback speed">${[0.5,0.75,1,1.25,1.5,2].map(r=>`<option value="${r}" ${r===1?'selected':''}>${r}×</option>`).join('')}</select>
+        <span class="lbl" style="margin-left:8px">When it ends</span>
+        <select data-r="endmode" aria-label="When a video ends"><option value="stop">Stop</option><option value="next">Play next in folder</option><option value="shuffle">Shuffle folder</option></select>
+        <button data-a="next">Next video</button>
+      </div>
+      <div class="row">
+        <span class="lbl">Size</span><input type="range" min="40" max="250" value="100" data-r="size" aria-label="Screen size">
+        <select data-r="swapwith" aria-label="Swap places with another screen"><option value="">Swap places with…</option></select>
+      </div>
+      <div class="err" data-r="err"></div>`;
+    const q=s=>el.querySelector(`[data-r="${s}"]`);
+    this.ui={el,name:q('name'),play:q('play'),seek:q('seek'),time:q('time'),vol:q('vol'),mute:q('mute'),loop:q('loop'),rate:q('rate'),size:q('size'),err:q('err'),url:q('url'),endmode:q('endmode')};
+    const sw=q('swapwith');
+    const fillSwap=()=>{ sw.innerHTML='<option value="">Swap places with…</option>'+visible().filter(s=>s!==this).map(s=>`<option value="${s.i}">Screen ${s.i+1}</option>`).join(''); };
+    sw.addEventListener('pointerdown',fillSwap); sw.addEventListener('focus',fillSwap);
+    sw.addEventListener('change',()=>{ const k=sw.value; sw.value=''; if(k!=='') swapScreens(this,slots[+k]); });
+    el.querySelector('input[type=file]').addEventListener('change',e=>{
+      const fs=[...e.target.files]; e.target.value=''; if(!fs.length) return;
+      if(fs.length===1){ this.loadFile(fs[0]); return; }
+      fs.sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true,sensitivity:'base'}));
+      this.setList(fs.map(f=>({name:f.name,kind:'file',file:f})), this.endMode==='shuffle'? Math.random()*fs.length|0 : 0);
+      this.next(0); // several files = a playlist
+    });
+    this.ui.endmode.addEventListener('change',()=>this.setEndMode(this.ui.endmode.value));
+    q('loadurl').addEventListener('click',()=>{ const u=this.ui.url.value.trim(); if(u) this.loadURL(u); });
+    this.ui.url.addEventListener('keydown',e=>{ if(e.key==='Enter'){ const u=this.ui.url.value.trim(); if(u) this.loadURL(u);} });
+    el.querySelectorAll('[data-a]').forEach(b=>b.addEventListener('click',()=>this.action(b.dataset.a)));
+    let seeking=false;
+    this.ui.seek.addEventListener('input',()=>{seeking=true; const d=this.video.duration; if(d) this.ui.time.textContent=fmt(this.ui.seek.value/1000*d)+' / '+fmt(d);});
+    this.ui.seek.addEventListener('change',()=>{seeking=false; this.action('seek',this.ui.seek.value/1000);});
+    this.isSeeking=()=>seeking;
+    this.ui.vol.addEventListener('input',()=>{ this.video.volume=this.ui.vol.value/100; if(this.video.volume>0) this.video.muted=false; });
+    this.ui.rate.addEventListener('change',()=>{ this.video.playbackRate=+this.ui.rate.value; });
+    this.ui.size.addEventListener('input',()=>sizeTo(this,this.ui.size.value/100));
+    return el;
+  }
+  err(t){ if(this.ui) this.ui.err.textContent=t; }
+  syncUI(){
+    if(!this.ui) return; const v=this.video, u=this.ui;
+    u.name.textContent = (this.name || 'No video loaded') + (this.list&&this.list.length>1? `  ·  ${this.pos+1} of ${this.list.length}` : '');
+    u.endmode.value=this.endMode;
+    u.play.textContent = this.isPaused()? 'Play':'Pause';
+    u.mute.classList.toggle('on',v.muted); u.loop.classList.toggle('on',v.loop);
+    u.vol.value=Math.round(v.volume*100); u.size.value=Math.round(this.scale*100);
+    this.syncTime();
+  }
+  syncTime(){
+    if(!this.ui || this.isSeeking()) return; const v=this.video, d=v.duration||0;
+    if(this.photo){ this.ui.seek.value=Math.round(this.photoFrac()*1000); this.ui.time.textContent='Photo '+(this.pos+1)+' / '+(this.list? this.list.length : 1); return; }
+    this.ui.seek.value = d? Math.round(v.currentTime/d*1000):0;
+    this.ui.time.textContent = fmt(v.currentTime)+' / '+fmt(d);
+  }
+}
+
+const slots=[0,1,2,3].map(i=>new Slot(i));
+const slotsEl=document.getElementById('slots');
+slots.forEach(s=>slotsEl.appendChild(s.buildCard()));
+slots.forEach(s=>s.syncUI());
+
+// Lay screens out edge to edge around you, using each screen's current size, so they can never overlap.
+// Each screen is a flat panel facing you at distance R, so it covers an angle of 2*atan(w/2R).
+const H_GAP=0.1, V_GAP=0.1, MIN_BOTTOM=0.2;
+function arrange(){
+  needArrange=false;
+  const L=LAYOUTS[layout], rows=L.rows.map(r=>r.map(p=>slots[slotAt[p]]));
+  const rowH=rows.map(r=>Math.max(...r.map(s=>s.dims.h)));
+  const rowB=rows.map(r=>Math.max(...r.map(s=>s.dims.bar)));
+  const total=rowH.reduce((a,h,i)=>a+h+rowB[i],0)+V_GAP*(rows.length-1);
+  const cy=L.y-1.6+eyeY; // layouts are designed for 1.6 m eyes; follow the real head height in VR
+  let top = rows.length===1? cy+rowH[0]/2 : cy+total/2;
+  top += Math.max(0, MIN_BOTTOM-(top-total));
+  rows.forEach((r,ri)=>{
+    const y=top-rowH[ri]/2;
+    const ang=r.map(s=>2*Math.atan(s.dims.w/(2*R))), gap=H_GAP/R;
+    let a=(ang.reduce((x,v)=>x+v,0)+gap*(r.length-1))/2; // leftmost edge (positive yaw is to your left)
+    r.forEach((s,k)=>{
+      const c=a-ang[k]/2;
+      s.group.position.set(-R*Math.sin(c), y, -R*Math.cos(c));
+      s.group.lookAt(0,y,0);
+      a-=ang[k]+gap;
+    });
+    top-=rowH[ri]+rowB[ri]+V_GAP;
+  });
+}
+function sizeTo(slot,v){
+  if(linkSize) visible().forEach(s=>s.setScale(v)); else slot.setScale(v);
+}
+// visible screens in the order they sit in the layout, left to right, top to bottom
+const layoutOrder=()=>LAYOUTS[layout].rows.flat().map(p=>slots[slotAt[p]]);
+// Trade two screens' places. The videos keep playing untouched, with their own size, sound and settings.
+function swapScreens(a,b){
+  if(!a||!b||a===b) return;
+  const pa=slotAt.indexOf(a.i), pb=slotAt.indexOf(b.i);
+  [slotAt[pa],slotAt[pb]]=[slotAt[pb],slotAt[pa]];
+  if(!a.group.visible||!b.group.visible) applyLayout(layout); else needArrange=true;
+  endSwap();
+}
+function startSwap(s){ swapFrom=s; swapUntil=performance.now()+15000; slots.forEach(x=>x.barDirty=true); }
+function endSwap(){ swapFrom=null; slots.forEach(x=>x.barDirty=true); if(typeof selected==='number') setSelected(selected); }
+function stepPhotoSecs(d){
+  const k=PHOTO_STEPS.indexOf(photoSecs);
+  setPhotoSecs(PHOTO_STEPS[Math.max(0,Math.min(PHOTO_STEPS.length-1,(k<0?4:k)+d))]);
+}
+function setPhotoSecs(v){
+  photoSecs=v; photoSel.value=String(v);
+  const now=performance.now();
+  for(const s of slots) if(s.photo){ if(s.slidePlaying) s.slideNext=now+v*1000; s.barDirty=true; } // restart the current photo's timer
+}
+const photoSel=document.getElementById('photoSecs');
+photoSel.innerHTML=PHOTO_STEPS.map(v=>`<option value="${v}">${v<60? v+' seconds' : (v/60)+(v===60?' minute':' minutes')}</option>`).join('');
+photoSel.value=String(photoSecs);
+photoSel.onchange=()=>setPhotoSecs(+photoSel.value);
+function applyLayout(l){
+  layout=l; const L=LAYOUTS[l], shown=new Set(L.rows.flat().map(p=>slotAt[p]));
+  slots.forEach((s,i)=>{ const on=shown.has(i); s.place(on,L.w,L.h||L.w*9/16); s.ui.el.hidden=!on; if(!on) s.pause(); });
+  arrange();
+  document.querySelectorAll('#layoutSeg button').forEach(b=>b.setAttribute('aria-pressed', b.dataset.l===l));
+  if(typeof selected==='number' && !slots[selected].group.visible) setSelected(0);
+}
+document.querySelectorAll('#layoutSeg button').forEach(b=>b.addEventListener('click',()=>applyLayout(b.dataset.l)));
+applyLayout('2');
+
+const visible=()=>slots.filter(s=>s.group.visible);
+document.getElementById('playAll').onclick=()=>visible().forEach(s=>s.play());
+document.getElementById('pauseAll').onclick=()=>visible().forEach(s=>s.pause());
+document.getElementById('restartAll').onclick=()=>visible().forEach(s=>{ if(s.photo){ s.pos=0; s.autoplay=true; s.next(0); } else if(s.loaded){s.video.currentTime=0; s.play();} });
+document.getElementById('muteAll').onclick=()=>slots.forEach(s=>s.video.muted=true);
+document.getElementById('autoHide').onchange=e=>autoHide=e.target.checked;
+document.getElementById('linkSize').onchange=e=>{ linkSize=e.target.checked; if(linkSize) sizeTo(slots[selected],slots[selected].scale); };
+
+// ---------- raycasting ----------
+function targets(){ const t=[]; if(lib.open) t.push(panel); for(const s of visible()) t.push(s.bar, s.mode==='2d'? s.mono : s.left); return t; }
+const tmpM=new THREE.Matrix4();
+function raycastFrom(rc){ const h=rc.intersectObjects(targets(),false)[0]; if(!h) return null;
+  const {slot,kind}=h.object.userData;
+  if(kind==='panel') return {kind,btn:browserHit(h.uv),dist:h.distance};
+  if(kind==='bar'){ const b=slot.hitBar(h.uv); return {slot,kind,btn:b,dist:h.distance}; }
+  return {slot,kind,dist:h.distance};
+}
+function activate(hit){
+  // second half of a swap: pick the other screen by clicking it or its HERE button
+  if(swapFrom && hit.slot && hit.slot!==swapFrom && (hit.kind==='screen' || (hit.btn && hit.btn.id==='swap'))){ swapScreens(swapFrom,hit.slot); return; }
+  if(hit.kind==='panel'){ if(hit.btn) browserClick(hit.btn); }
+  else if(hit.kind==='screen') hit.slot.toggle();
+  else if(hit.btn) hit.slot.action(hit.btn.id,hit.btn.frac);
+}
+
+// ---------- media library ----------
+const VIDEO_EXT=/\.(mp4|m4v|webm|mkv|mov|ogv)$/i;
+const IMAGE_EXT=/\.(jpe?g|png|webp|gif|bmp|avif|jps)$/i;
+const DISP='"Barlow Condensed", Arial Narrow, sans-serif', BODY='Barlow, Arial, sans-serif';
+const lib={roots:[], path:[], entries:[], page:0, gen:0, msg:'', note:'', target:0, mode:'2d', swap:false,
+  open:false, hover:null, dirty:true, rects:[]};
+const PER_PAGE=12;
+const isPlayable=e=>e.kind==='file'||e.kind==='image';
+// Folder sort: 'az' by name, or 'latest' newest first. Folders always stay above files.
+lib.sort='az'; // mirrors the target screen's own sort (Slot.sort); every screen starts at A–Z
+const dates=new Map(); // entry key -> last-modified ms, cached for the session
+const fmtDate=t=>new Date(t).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
+const dateTag=e=>{ const t=lib.sort==='latest' && dates.get(e.key); return t? '  ·  '+fmtDate(t) : ''; };
+const vdirLatest=d=>{ let t=0; for(const c of d.values()) t=Math.max(t, c.file? c.file.lastModified : c.vdir? vdirLatest(c.vdir) : 0); return t; };
+// Browsers can't read a folder's own date, so a folder counts as the date of its newest video,
+// looking in the folder itself and one level of subfolders.
+async function dirLatest(handle,depth){
+  let t=0;
+  for await (const h of handle.values()){
+    if(hiddenName(h.name)) continue;
+    if(h.kind==='file'){ if(VIDEO_EXT.test(h.name)||IMAGE_EXT.test(h.name)) t=Math.max(t,(await h.getFile()).lastModified); }
+    else if(depth>0) t=Math.max(t,await dirLatest(h,depth-1));
+  }
+  return t;
+}
+async function entryDate(e){
+  if(dates.has(e.key)) return dates.get(e.key);
+  let t=0;
+  try{
+    if(e.kind==='file'||e.kind==='image') t=(await getFile(e)).lastModified;
+    else if(e.vdir) t=vdirLatest(e.vdir);
+    else if(e.handle) t=await dirLatest(e.handle,1);
+  }catch(err){}
+  dates.set(e.key,t); return t;
+}
+async function pool(items,n,fn){ let i=0; await Promise.all(Array.from({length:Math.min(n,items.length)},async()=>{ while(i<items.length) await fn(items[i++]); })); }
+async function sortEntries(list){
+  if(lib.sort!=='latest') return list.sort(byName);
+  await pool(list,8,entryDate);
+  return list.sort((a,b)=>(a.kind===b.kind?0:a.kind==='dir'?-1:1) || (dates.get(b.key)||0)-(dates.get(a.key)||0) || byName(a,b));
+}
+function setSort(m){
+  if(lib.sort===m) return;
+  lib.sort=m; slots[lib.target].sort=m;
+  if(lib.path.length) refreshDir(); else lib.dirty=true;
+}
+const byName=(a,b)=>(a.kind===b.kind?0:a.kind==='dir'?-1:1) || a.name.localeCompare(b.name,undefined,{numeric:true,sensitivity:'base'});
+const hiddenName=n=>n.startsWith('.')||n.startsWith('$')||n==='System Volume Information';
+async function listDir(d){
+  const out=[];
+  if(d.handle){
+    for await (const h of d.handle.values()){
+      if(hiddenName(h.name)) continue;
+      if(h.kind==='directory') out.push({name:h.name,kind:'dir',handle:h,key:d.key+'/'+h.name});
+      else if(VIDEO_EXT.test(h.name)) out.push({name:h.name,kind:'file',handle:h,key:d.key+'/'+h.name});
+      else if(IMAGE_EXT.test(h.name)) out.push({name:h.name,kind:'image',handle:h,key:d.key+'/'+h.name});
+    }
+  } else for(const c of d.vdir.values()) out.push({...c,key:d.key+'/'+c.name});
+  return out.sort(byName);
+}
+const getFile=n=>n.file? Promise.resolve(n.file) : n.handle.getFile();
+// A photo for a screen: {bmp, w, h}, plus .tex once it's on the GPU. Release with disposePhoto.
+// createImageBitmap decodes and resizes off the main thread. Uploading a full-size camera photo
+// (and converting it on the way) blocks the thread that draws every video, which froze them all.
+// 4096 px on the long side is still more than a screen in the headset can show; SBS keeps 2048 per eye.
+const PHOTO_MAX=4096;
+async function decodeImage(e){
+  const file=await getFile(e);
+  let bmp;
+  try{ bmp=await createImageBitmap(file); }catch(err){ throw new Error('this image format can\'t be shown by the browser'); }
+  const big=Math.max(bmp.width,bmp.height);
+  if(big>PHOTO_MAX){
+    const k=PHOTO_MAX/big, w=Math.round(bmp.width*k), h=Math.round(bmp.height*k);
+    bmp.close(); bmp=await createImageBitmap(file,{resizeWidth:w,resizeHeight:h,resizeQuality:'high'});
+  }
+  return {bmp,w:bmp.width,h:bmp.height};
+}
+function photoTexture(bmp){
+  const t=new THREE.Texture(bmp);
+  // WebGL can't flip an ImageBitmap while uploading it, so flip in the texture coordinates instead
+  t.flipY=false; t.repeat.set(1,-1); t.offset.set(0,1);
+  t.minFilter=THREE.LinearMipmapLinearFilter; t.magFilter=THREE.LinearFilter; t.generateMipmaps=true; // mipmaps keep photos from shimmering
+  t.anisotropy=renderer.capabilities.getMaxAnisotropy(); t.needsUpdate=true;
+  renderer.initTexture(t); // upload now, not in the middle of a frame
+  return t;
+}
+function disposePhoto(im){ if(im.tex) im.tex.dispose(); im.bmp.close(); }
+// small photo thumbnail, letterboxed rather than cropped so side-by-side 3D photos show both halves
+async function photoThumb(e){
+  // decoded straight to thumbnail size off the main thread (height follows the photo's shape)
+  const bm=await createImageBitmap(await getFile(e),{resizeWidth:768,resizeQuality:'medium'});
+  const c=document.createElement('canvas'); c.width=384; c.height=216; const x=c.getContext('2d');
+  const k=Math.min(384/bm.width,216/bm.height);
+  x.fillStyle='#000'; x.fillRect(0,0,384,216); x.drawImage(bm,(384-bm.width*k)/2,(216-bm.height*k)/2,bm.width*k,bm.height*k);
+  bm.close(); return {state:'done',img:c};
+}
+
+// remembered folders (IndexedDB keeps directory handles between visits)
+const idb=(()=>{ let dbp;
+  const open=()=>dbp||(dbp=new Promise((res,rej)=>{ const r=indexedDB.open('mvr-library',1);
+    r.onupgradeneeded=()=>r.result.createObjectStore('roots'); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }));
+  const tx=async(mode,f)=>{ const db=await open(); return new Promise((res,rej)=>{ const t=db.transaction('roots',mode); const r=f(t.objectStore('roots'));
+    t.oncomplete=()=>res(r&&r.result); t.onerror=()=>rej(t.error); }); };
+  return {all:()=>tx('readonly',s=>s.getAll()), put:(k,v)=>tx('readwrite',s=>s.put(v,k)), del:k=>tx('readwrite',s=>s.delete(k))};
+})();
+const mkRoot=(id,name,handle,perm)=>({id,name,handle,perm,node:{name,kind:'dir',handle,key:id}});
+
+const rootListEl=document.getElementById('rootList');
+function renderRootList(){
+  rootListEl.innerHTML='';
+  lib.roots.forEach(r=>{
+    const li=document.createElement('li');
+    const st= r.temp? 'this session only' : r.perm==='granted'? 'ready' : 'needs reconnect';
+    li.innerHTML=`<span class="n"></span><span class="st">${st}</span>`+(r.perm!=='granted'?'<button data-x="re">Reconnect</button>':'')+'<button data-x="rm">Remove</button>';
+    li.querySelector('.n').textContent=r.name;
+    li.querySelector('[data-x="rm"]').onclick=()=>removeRoot(r);
+    const re=li.querySelector('[data-x="re"]'); if(re) re.onclick=()=>reconnect(r);
+    rootListEl.appendChild(li);
+  });
+  if(!lib.path.length) refreshDir(); else lib.dirty=true;
+}
+async function reconnect(r){
+  try{ r.perm=await r.handle.requestPermission({mode:'read'}); }catch(e){ r.perm='prompt'; }
+  renderRootList(); return r.perm==='granted';
+}
+async function removeRoot(r){
+  lib.roots.splice(lib.roots.indexOf(r),1);
+  if(!r.temp) try{ await idb.del(r.id); }catch(e){}
+  if(lib.path[0]===r.node) lib.path=[];
+  renderRootList();
+}
+async function loadRoots(){
+  try{
+    for(const v of await idb.all()){
+      let perm='prompt'; try{ perm=await v.handle.queryPermission({mode:'read'}); }catch(e){}
+      lib.roots.push(mkRoot(v.id,v.name,v.handle,perm));
+    }
+  }catch(e){}
+  renderRootList();
+}
+const dirInput=document.getElementById('dirInput');
+document.getElementById('addFolder').onclick=async()=>{
+  if(!window.showDirectoryPicker){ dirInput.click(); return; }
+  let h; try{ h=await showDirectoryPicker({id:'mvr-videos',mode:'read'}); }
+  catch(e){ if(e.name!=='AbortError') setStatus('Couldn\'t open that folder: '+(e.message||e)); return; }
+  for(const r of lib.roots) if(r.handle && await r.handle.isSameEntry(h)){ setStatus('"'+h.name+'" is already in the library.'); return; }
+  const id='r'+Date.now(); lib.roots.push(mkRoot(id,h.name,h,'granted'));
+  try{ await idb.put(id,{id,name:h.name,handle:h}); }catch(e){}
+  setStatus(''); renderRootList();
+};
+// fallback for browsers without the File System Access API: remembered only until the page closes
+dirInput.onchange=()=>{
+  const id='v'+Date.now(), root={name:'',kind:'dir',vdir:new Map(),key:id};
+  for(const f of dirInput.files){
+    if(!VIDEO_EXT.test(f.name) && !IMAGE_EXT.test(f.name)) continue;
+    const parts=(f.webkitRelativePath||f.name).split('/'); if(!root.name) root.name=parts.length>1? parts[0] : 'Videos';
+    let d=root;
+    for(const p of parts.slice(1,-1)){ let n=d.vdir.get(p); if(!n){ n={name:p,kind:'dir',vdir:new Map()}; d.vdir.set(p,n); } d=n; }
+    d.vdir.set(f.name,{name:f.name,kind:IMAGE_EXT.test(f.name)? 'image':'file',file:f});
+  }
+  dirInput.value='';
+  if(!root.name){ setStatus('No playable videos found in that folder.'); return; }
+  lib.roots.push({id,name:root.name,perm:'granted',temp:true,node:root}); renderRootList();
+};
+document.getElementById('openBrowser').onclick=()=>openBrowser(selected);
+
+// thumbnails, grabbed from ~20% into each video
+const thumbs=new Map(), thumbQ=[]; let thumbBusy=0;
+function wantThumb(e){ if(thumbs.has(e.key)) return; thumbs.set(e.key,{state:'pending'}); thumbQ.push(e); pumpThumbs(); }
+function clearThumbQ(){ for(const e of thumbQ) thumbs.delete(e.key); thumbQ.length=0; }
+function pumpThumbs(){
+  while(thumbBusy<1 && thumbQ.length){ // one at a time so thumbnails don't starve the playing videos of decoder time
+    const e=thumbQ.shift(); thumbBusy++;
+    makeThumb(e).then(r=>thumbs.set(e.key,r),()=>thumbs.set(e.key,{state:'fail'})).finally(()=>{
+      thumbBusy--; lib.dirty=true;
+      if(thumbs.size>400) for(const [k,v] of thumbs){ if(v.state!=='pending'){ thumbs.delete(k); break; } }
+      pumpThumbs();
+    });
+  }
+}
+function makeThumb(e){ if(e.kind==='image') return photoThumb(e);
+  return new Promise(async(res,rej)=>{
+    const v=document.createElement('video'); let url;
+    const done=(r,err)=>{ clearTimeout(to); v.removeAttribute('src'); v.load(); if(url) URL.revokeObjectURL(url); err? rej(err) : res(r); };
+    const to=setTimeout(()=>done(null,new Error('timeout')),12000);
+    try{ url=URL.createObjectURL(await getFile(e)); }catch(err){ return done(null,err); }
+    let dur=0;
+    v.muted=true; v.preload='auto';
+    v.onloadedmetadata=()=>{ dur=isFinite(v.duration)? v.duration : 0; v.currentTime = dur? Math.min(dur*0.2,300) : 1; };
+    v.onseeked=()=>{
+      const c=document.createElement('canvas'); c.width=384; c.height=216; const x=c.getContext('2d');
+      const vw=v.videoWidth||16, vh=v.videoHeight||9, k=Math.max(384/vw,216/vh);
+      x.fillStyle='#000'; x.fillRect(0,0,384,216); x.drawImage(v,(384-vw*k)/2,(216-vh*k)/2,vw*k,vh*k);
+      done({state:'done',img:c,dur,w:v.videoWidth,h:v.videoHeight});
+    };
+    v.onerror=()=>done(null,new Error('decode'));
+    v.src=url;
+  });
+}
+function queueThumbs(){
+  clearThumbQ();
+  for(const e of pageEntries()) if(isPlayable(e)) wantThumb(e);
+}
+const pageCount=()=>Math.max(1,Math.ceil(lib.entries.length/PER_PAGE));
+const pageEntries=()=>lib.entries.slice(lib.page*PER_PAGE,(lib.page+1)*PER_PAGE);
+
+async function refreshDir(){
+  const gen=++lib.gen; lib.page=0; lib.note=''; clearThumbQ();
+  if(!lib.path.length){
+    lib.entries=lib.roots.map(r=>({name:r.name,kind:'dir',root:r,key:'root:'+r.id}));
+    lib.msg=lib.roots.length? '' : 'No video folders yet.\nTake off the headset, click "Add video folder…" on the page\nand choose the folder your videos are in. You only do this once.';
+    lib.dirty=true; return;
+  }
+  lib.entries=[]; lib.msg='Reading folder…'; lib.dirty=true;
+  try{
+    let e=await listDir(lib.path[lib.path.length-1]); if(gen!==lib.gen) return;
+    if(lib.sort==='latest' && e.length){ lib.msg='Sorting by date…'; lib.dirty=true; e=await sortEntries(e); if(gen!==lib.gen) return; }
+    lib.entries=e; lib.msg=e.length? '' : 'No videos or folders in here.';
+  }catch(err){
+    if(gen!==lib.gen) return;
+    lib.msg=err.name==='NotAllowedError'? 'Access to this folder needs to be confirmed again.\nClick Reconnect next to it on the page.' : 'Couldn\'t read this folder.\n'+(err.message||err);
+  }
+  lib.dirty=true; if(lib.open) queueThumbs();
+}
+async function openRoot(r){
+  if(r.handle && r.perm!=='granted' && !await reconnect(r)){
+    lib.note='Confirm access to "'+r.name+'": take off the headset and click Reconnect on the page.'; lib.dirty=true; return;
+  }
+  lib.path=[r.node]; refreshDir();
+}
+function browserBack(){ if(lib.path.length){ lib.path.pop(); refreshDir(); } else closeBrowser(); }
+function turnPage(d){ const p=Math.max(0,Math.min(pageCount()-1,lib.page+d)); if(p!==lib.page){ lib.page=p; lib.dirty=true; queueThumbs(); } }
+function applyFmt(){ const s=slots[lib.target]; s.mode=lib.mode; s.swap=lib.swap; s.applyMode(); }
+function setTarget(i){
+  lib.target=i; lib.mode=slots[i].mode; lib.swap=slots[i].swap; lib.dirty=true;
+  // the browser stays in the same folder, but shows it the way this screen sorts
+  if(lib.sort!==slots[i].sort){ lib.sort=slots[i].sort; if(lib.path.length && lib.src!=='scenes') refreshDir(); }
+}
+// play a file from the current folder; the rest of the folder becomes that screen's playlist
+function playFromFolder(e,endMode){
+  const kinds={}; for(const x of lib.entries) if(isPlayable(x)) kinds[x.kind]=(kinds[x.kind]||0)+1;
+  const kind= e? e.kind : Object.keys(kinds).sort((a,b)=>kinds[b]-kinds[a])[0];
+  const files=lib.entries.filter(x=>x.kind===kind); if(!files.length) return;
+  const s=slots[lib.target];
+  if(endMode) s.endMode=endMode;
+  const cur= e? files.indexOf(e) : s.endMode==='shuffle'? Math.random()*files.length|0 : 0;
+  s.mode=lib.mode; s.swap=lib.swap; s.applyMode();
+  s.autoplay=true; s.setList(files,cur); s.next(0);
+  closeBrowser(); setSelected(s.i);
+}
+function browserClick(b){
+  switch(b.id){
+    case 'close': closeBrowser(); break;
+    case 'up': browserBack(); break;
+    case 'home': lib.path=[]; refreshDir(); break;
+    case 'root': openRoot(lib.roots[b.data]); break;
+    case 'tile': { const e=pageEntries()[b.data]; if(!e) break;
+      if(e.root) openRoot(e.root); else if(e.kind==='dir'){ lib.path.push(e); refreshDir(); } else playFromFolder(e); break; }
+    case 'target': setTarget(b.data); break;
+    case 'fmt': lib.mode=b.data; applyFmt(); break;
+    case 'eyes': lib.swap=!lib.swap; applyFmt(); break;
+    case 'page': turnPage(b.data); break;
+    case 'sort': setSort(b.data); break;
+    case 'end': slots[lib.target].setEndMode(b.data); break;
+    case 'playall': playFromFolder(null,'next'); break;
+    case 'shuffleall': playFromFolder(null,'shuffle'); break;
+  }
+  lib.dirty=true;
+}
+
+// ---------- media browser panel (curved, Whirligig-style) ----------
+const PW=2048, PH=1152;
+const panelCanvas=document.createElement('canvas'); panelCanvas.width=PW; panelCanvas.height=PH;
+const pctx=panelCanvas.getContext('2d');
+const panelTex=new THREE.CanvasTexture(panelCanvas); panelTex.anisotropy=renderer.capabilities.getMaxAnisotropy();
+function curvedPlane(w,h,r,seg){
+  const g=new THREE.PlaneGeometry(w,h,seg,1), p=g.attributes.position;
+  for(let i=0;i<p.count;i++){ const a=p.getX(i)/r; p.setXYZ(i, r*Math.sin(a), p.getY(i), r-r*Math.cos(a)); }
+  g.computeBoundingSphere(); g.computeBoundingBox(); return g;
+}
+const PANEL_DIST=2.0;
+const panel=new THREE.Mesh(curvedPlane(2.4,2.4*PH/PW,PANEL_DIST,40), new THREE.MeshBasicMaterial({map:panelTex,transparent:true}));
+panel.userData={kind:'panel'}; panel.visible=false; scene.add(panel);
+
+function openBrowser(i){
+  const t=slots[i].group.visible? i : (visible()[0]||slots[0]).i;
+  setTarget(t);
+  camera.updateMatrixWorld();
+  const head=new THREE.Vector3().setFromMatrixPosition(camera.matrixWorld);
+  const dir=new THREE.Vector3(0,0,-1).transformDirection(camera.matrixWorld); dir.y=0;
+  if(dir.lengthSq()<1e-4) dir.set(0,0,-1); dir.normalize();
+  panel.position.copy(head).addScaledVector(dir,PANEL_DIST); panel.position.y=head.y-0.1;
+  panel.lookAt(head.x,panel.position.y,head.z);
+  lib.open=true; panel.visible=true; lib.dirty=true;
+  if(!lib.entries.length) refreshDir(); else queueThumbs();
+}
+function closeBrowser(){ lib.open=false; panel.visible=false; lib.hover=null; clearThumbQ(); }
+
+function fit(c,t,max){ if(c.measureText(t).width<=max) return t; while(t.length>1 && c.measureText(t+'…').width>max) t=t.slice(0,-1); return t+'…'; }
+function fitLeft(c,t,max){ if(c.measureText(t).width<=max) return t; while(t.length>1 && c.measureText('…'+t).width>max) t=t.slice(1); return '…'+t; }
+function browserHit(uv){
+  const x=uv.x*PW, y=(1-uv.y)*PH;
+  const r=lib.rects.find(r=>x>=r.x && x<=r.x+r.w && y>=r.y && y<=r.y+r.h);
+  return r? {id:r.id,data:r.data,key:r.key} : null;
+}
+function drawPanel(){
+  const c=pctx, acc=SLOT_COLORS_DARK[lib.target]; lib.rects=[];
+  const btn=(id,label,x,y,w,h,o={})=>{
+    const key=id+(o.data!=null? ':'+o.data : ''), hov=!o.dis && lib.hover===key;
+    c.globalAlpha=o.dis? 0.35 : 1;
+    c.fillStyle=o.on? (o.color||acc) : hov? '#454b72' : '#262b45'; rr(c,x,y,w,h,16); c.fill();
+    if(hov){ c.strokeStyle=o.color||acc; c.lineWidth=4; rr(c,x+2,y+2,w-4,h-4,14); c.stroke(); }
+    c.fillStyle=o.on? '#10121f' : '#e9e8f2'; c.font=o.font||'700 34px '+DISP;
+    c.textAlign=o.left? 'left':'center'; c.textBaseline='middle';
+    c.fillText(fit(c,label,w-28), o.left? x+22 : x+w/2, y+h/2+2);
+    c.globalAlpha=1;
+    if(!o.dis) lib.rects.push({x,y,w,h,id,data:o.data,key});
+  };
+  const label=(t,x,y)=>{ c.fillStyle='#9a9eb9'; c.font='600 26px '+BODY; c.textAlign='left'; c.textBaseline='middle'; c.fillText(t,x,y); };
+
+  c.clearRect(0,0,PW,PH);
+  c.fillStyle='rgba(12,14,24,0.95)'; rr(c,0,0,PW,PH,36); c.fill();
+  // title bar
+  c.fillStyle='#181c2f'; rr(c,0,0,PW,120,36); c.fill(); c.fillRect(0,60,PW,60);
+  c.fillStyle=acc; c.fillRect(0,118,PW,4);
+  c.fillStyle='#e9e8f2'; c.font='700 60px '+DISP; c.textAlign='left'; c.textBaseline='middle'; c.fillText('MEDIA',40,64);
+  btn('up','▲  UP',440,24,150,72,{dis:!lib.path.length});
+  c.fillStyle='#e9e8f2'; c.font='600 34px '+BODY; c.textAlign='left';
+  c.fillText(fitLeft(c,['Places',...lib.path.map(n=>n.name)].join('  ›  '),880),620,62);
+  const noFiles=!lib.entries.some(isPlayable);
+  btn('playall','▶  PLAY ALL',1520,24,200,72,{dis:noFiles});
+  btn('shuffleall','⤮  SHUFFLE',1730,24,200,72,{dis:noFiles});
+  btn('close','✕',1940,24,84,72);
+
+  // sidebar
+  btn('home','⌂  Places',40,146,364,70,{on:!lib.path.length,left:true,font:'600 32px '+BODY});
+  lib.roots.slice(0,5).forEach((r,i)=>
+    btn('root',(r.perm!=='granted'&&!r.temp? '⚠ ':'')+r.name,40,226+i*80,364,70,{data:i,on:lib.path[0]===r.node,left:true,font:'600 30px '+BODY}));
+  label('LOAD TO SCREEN',40,680);
+  for(let i=0;i<4;i++) btn('target',String(i+1),40+i*94,704,84,76,{data:i,on:lib.target===i,color:SLOT_COLORS_DARK[i],dis:!slots[i].group.visible});
+  label('FORMAT',40,822);
+  const fm=[['2d','2D'],['sbs','SBS'],['tb','OU'],[null,'L⇄R'],['sbs-half','SBS ½'],['tb-half','OU ½']];
+  fm.forEach(([m,t],k)=>{ const x=40+(k%3)*125, y=846+Math.floor(k/3)*88;
+    m? btn('fmt',t,x,y,114,78,{data:m,on:lib.mode===m}) : lib.mode!=='2d' && btn('eyes',t,x,y,114,78,{on:lib.swap}); });
+  label('WHEN A VIDEO ENDS',40,1038);
+  [['stop','STOP'],['next','NEXT'],['shuffle','SHUFFLE']].forEach(([m,t],k)=>
+    btn('end',t,40+k*125,1058,114,72,{data:m,on:slots[lib.target].endMode===m}));
+
+  // grid
+  const GX=440, GY=140, TW=378, TH=292, GAP=24;
+  const list=pageEntries();
+  if(!list.length && lib.msg){
+    c.fillStyle='#9a9eb9'; c.font='500 36px '+BODY; c.textAlign='center'; c.textBaseline='middle';
+    lib.msg.split('\n').forEach((l,i,a)=>c.fillText(l,GX+792,560+(i-(a.length-1)/2)*54));
+  }
+  list.forEach((e,i)=>{
+    const x=GX+(i%4)*(TW+GAP), y=GY+Math.floor(i/4)*(TH+20), key='tile:'+i, hov=lib.hover===key;
+    c.fillStyle=hov? '#262b45' : '#1a1e33'; rr(c,x,y,TW,TH,18); c.fill();
+    const tx=x+10, ty=y+10, tw=TW-20, th=Math.round(tw*9/16);
+    c.save(); rr(c,tx,ty,tw,th,12); c.clip();
+    c.fillStyle='#10131f'; c.fillRect(tx,ty,tw,th);
+    const t=thumbs.get(e.key);
+    if(e.kind==='dir'){
+      const fw=tw*0.36, fh=fw*0.7, fx=tx+(tw-fw)/2, fy=ty+(th-fh)/2+8;
+      c.fillStyle=e.root&&e.root.perm!=='granted'&&!e.root.temp? '#5d6180' : '#8b93c4';
+      rr(c,fx,fy-fh*0.16,fw*0.42,fh*0.3,8); c.fill(); rr(c,fx,fy,fw,fh,12); c.fill();
+    } else if(t&&t.state==='done'){
+      c.drawImage(t.img,tx,ty,tw,th);
+    } else {
+      c.fillStyle='#5d6180';
+      if(t&&t.state==='fail'){ c.beginPath(); c.moveTo(tx+tw/2-26,ty+th/2-32); c.lineTo(tx+tw/2+34,ty+th/2); c.lineTo(tx+tw/2-26,ty+th/2+32); c.fill(); }
+      else { c.font='700 48px '+DISP; c.textAlign='center'; c.textBaseline='middle'; c.fillText('…',tx+tw/2,ty+th/2); }
+    }
+    c.restore();
+    if(t&&t.dur){ c.font='600 24px '+BODY; const s=fmt(t.dur), w=c.measureText(s).width+20;
+      c.fillStyle='rgba(0,0,0,.78)'; rr(c,tx+tw-w-8,ty+th-44,w,36,8); c.fill();
+      c.fillStyle='#fff'; c.textAlign='center'; c.textBaseline='middle'; c.fillText(s,tx+tw-8-w/2,ty+th-25); }
+    const on=(e.kind==='file'||e.kind==='image') && slots.find(s=>s.group.visible && s.name===e.name);
+    if(on){ c.fillStyle=on.color; rr(c,tx+8,ty+8,96,36,8); c.fill(); c.fillStyle='#10121f'; c.font='700 26px '+DISP; c.textAlign='center'; c.textBaseline='middle'; c.fillText('SCREEN '+(on.i+1),tx+56,ty+27); }
+    c.textAlign='left'; c.textBaseline='alphabetic';
+    c.fillStyle='#e9e8f2'; c.font='600 32px '+BODY; c.fillText(fit(c,e.name.replace(VIDEO_EXT,''),tw-8),tx+4,ty+th+44);
+    c.fillStyle='#9a9eb9'; c.font='500 24px '+BODY;
+    const sub= e.root? (e.root.perm!=='granted'&&!e.root.temp? 'Press A to reconnect' : 'Folder')
+      : e.kind==='dir'? 'Folder'+dateTag(e) : (t&&t.w? t.w+'×'+t.h+'  ·  ' : '')+e.name.split('.').pop().toUpperCase()+dateTag(e);
+    c.fillText(fit(c,sub,tw-8),tx+4,ty+th+78);
+    if(hov){ c.strokeStyle=acc; c.lineWidth=6; rr(c,x+3,y+3,TW-6,TH-6,16); c.stroke(); }
+    lib.rects.push({x,y,w:TW,h:TH,id:'tile',data:i,key});
+  });
+
+  // footer
+  const pc=pageCount();
+  c.textBaseline='middle'; c.font='500 28px '+BODY;
+  if(lib.note){ c.fillStyle=acc; c.textAlign='left'; c.fillText(fit(c,lib.note,600),GX,1104); }
+  else if(lib.entries.length){ c.fillStyle='#9a9eb9'; c.textAlign='left'; c.fillText(lib.entries.length+' item'+(lib.entries.length>1?'s':''),GX,1104); }
+  if(lib.src!=='scenes' && lib.path.length){
+    btn('sort','A–Z',1060,1068,150,72,{data:'az',on:lib.sort==='az'});
+    btn('sort','LATEST',1220,1068,190,72,{data:'latest',on:lib.sort==='latest'});
+  }
+  if(pc>1){
+    btn('page','◀',1540,1068,110,72,{data:-1,dis:lib.page===0});
+    c.fillStyle='#e9e8f2'; c.font='600 30px '+BODY; c.textAlign='center'; c.fillText((lib.page+1)+' / '+pc,1727,1105);
+    btn('page','▶',1804,1068,110,72,{data:1,dis:lib.page>=pc-1});
+  }
+  panelTex.needsUpdate=true; lib.dirty=false;
+}
+
+// ---------- head cursor ----------
+let headCursor=true, gazeHit=null, gazeSlot=null;
+const hcEl=document.getElementById('headCursor'); hcEl.onchange=()=>headCursor=hcEl.checked;
+const gazeRC=new THREE.Raycaster();
+const reticle=new THREE.Group();
+const retMat=new THREE.MeshBasicMaterial({color:0xffffff,depthTest:false,transparent:true});
+const retOuter=new THREE.Mesh(new THREE.RingGeometry(0.019,0.025,40),new THREE.MeshBasicMaterial({color:0x000000,depthTest:false,transparent:true,opacity:0.55}));
+const retRing=new THREE.Mesh(new THREE.RingGeometry(0.011,0.019,40),retMat);
+const retDot=new THREE.Mesh(new THREE.CircleGeometry(0.004,16),retMat);
+for(const m of [retOuter,retRing,retDot]){ m.renderOrder=999; reticle.add(m); }
+reticle.visible=false; scene.add(reticle);
+function updateGaze(){
+  if(!headCursor || !(renderer.xr.isPresenting || padActive)){ gazeHit=null; gazeSlot=null; reticle.visible=false; return; }
+  if(!renderer.xr.isPresenting) camera.updateMatrixWorld();
+  const o=gazeRC.ray.origin.setFromMatrixPosition(camera.matrixWorld);
+  gazeRC.ray.direction.set(0,0,-1).transformDirection(camera.matrixWorld);
+  gazeHit=raycastFrom(gazeRC); if(gazeHit) gazeHit.gaze=true;
+  const d=gazeHit? Math.max(0.3,gazeHit.dist-0.02) : 2.5;
+  const live=!!(gazeHit && (gazeHit.btn || gazeHit.kind==='screen'));
+  reticle.position.copy(o).addScaledVector(gazeRC.ray.direction,d);
+  reticle.quaternion.setFromRotationMatrix(tmpM.extractRotation(camera.matrixWorld));
+  reticle.scale.setScalar(d*(live? 1.35 : 1));
+  retMat.color.set(live? (lib.open? SLOT_COLORS_DARK[lib.target] : gazeHit.slot? gazeHit.slot.color : '#ffffff') : '#c9cce0');
+  reticle.visible=true;
+  // looking at a screen selects it
+  const gs=gazeHit && gazeHit.slot || null;
+  if(gs && gs!==gazeSlot && padActive && gs.i!==selected) setSelected(gs.i);
+  gazeSlot=gs;
+}
+
+// ---------- controllers ----------
+const controllers=[];
+for(let i=0;i<2;i++){
+  const c=renderer.xr.getController(i);
+  const lineGeo=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0),new THREE.Vector3(0,0,-1)]);
+  const line=new THREE.Line(lineGeo,new THREE.LineBasicMaterial({color:0xffffff,transparent:true,opacity:0.7}));
+  line.scale.z=5; c.add(line);
+  const dot=new THREE.Mesh(new THREE.SphereGeometry(0.012,12,8),new THREE.MeshBasicMaterial({color:0xffffff}));
+  dot.visible=false; scene.add(dot);
+  const st={c,line,dot,rc:new THREE.Raycaster(),hit:null,source:null,nextStick:0};
+  c.addEventListener('connected',e=>st.source=e.data);
+  c.addEventListener('disconnected',()=>{st.source=null;});
+  c.addEventListener('selectstart',()=>{ if(st.hit) activate(st.hit); });
+  scene.add(c); controllers.push(st);
+}
+
+// ---------- VR session ----------
+const vrBtn=document.getElementById('vrBtn'); let session=null;
+async function checkVR(){
+  if(!navigator.xr){ vrBtn.textContent='VR not available'; setStatus('This browser has no WebXR. Use Chrome or Edge on the PC your Rift is connected to, with the Oculus app running.'); return; }
+  try{
+    const ok=await navigator.xr.isSessionSupported('immersive-vr');
+    if(ok){ vrBtn.disabled=false; vrBtn.textContent='Enter VR'; }
+    else { vrBtn.textContent='No headset found'; setStatus('No VR headset detected. Start the Oculus app, make sure the Rift is connected, then reload this page.'); }
+  }catch(e){ vrBtn.textContent='VR not available'; setStatus('The page is not allowed to use VR in this context. Try opening it in its own browser tab.'); }
+}
+checkVR();
+vrBtn.onclick=async()=>{
+  if(session){ session.end(); return; }
+  try{
+    let s, floor=true;
+    try{ s=await navigator.xr.requestSession('immersive-vr',{requiredFeatures:['local-floor']}); }
+    catch(e){ s=await navigator.xr.requestSession('immersive-vr'); floor=false; }
+    renderer.xr.setReferenceSpaceType(floor?'local-floor':'local');
+    world.position.y = floor? 0 : -1.6;
+    await renderer.xr.setSession(s);
+    session=s; vrBtn.textContent='Exit VR'; setStatus(''); measureEyeAt=performance.now()+1500;
+    s.addEventListener('end',()=>{ session=null; vrBtn.textContent='Enter VR'; world.position.y=0;
+      camera.position.set(0,1.6,0); camera.scale.set(1,1,1); camera.rotation.set(pitch,yaw,0,'YXZ');
+      eyeY=1.6; measureEyeAt=0; needArrange=true; resize(); });
+  }catch(e){ setStatus('Couldn\'t start VR: '+(e.message||e)); }
+};
+
+// ---------- Xbox controller ----------
+var selected=0; let padActive=false, padPrev=[], padHeld={};
+const padEl=document.getElementById('padStatus');
+function setSelected(i){
+  selected=i;
+  slots.forEach(s=>{ s.frame.visible = padActive && s.i===i; s.ui.el.classList.toggle('sel', padActive && s.i===i); });
+  slots[i].lastHover=performance.now(); slots[i].barDirty=true;
+}
+function cycle(d){
+  const v=layoutOrder(); if(!v.length) return;
+  let k=v.indexOf(slots[selected]); k = k<0? 0 : (k+d+v.length)%v.length;
+  setSelected(v[k].i);
+}
+window.addEventListener('gamepadconnected',e=>{
+  padActive=true; setSelected(selected);
+  padEl.textContent='Controller connected. Screen '+(selected+1)+' is selected; use the D-pad left and right to switch.';
+});
+window.addEventListener('gamepaddisconnected',()=>{
+  padActive=false; setSelected(selected);
+  padEl.textContent='Controller disconnected. Press any button on it to reconnect.';
+});
+function pollPad(now){
+  const pads=navigator.getGamepads? navigator.getGamepads() : [];
+  let gp=null; for(const p of pads) if(p && p.connected && p.buttons.length>=16){ gp=p; break; }
+  if(!gp) return;
+  if(!padActive){ padActive=true; setSelected(selected); }
+  const cur=gp.buttons.map(b=>b.pressed || b.value>0.5);
+  const ax=gp.axes||[];
+  // virtual buttons for sticks
+  cur[100]=ax[0]<-0.6; cur[101]=ax[0]>0.6; cur[102]=ax[3]<-0.6; cur[103]=ax[3]>0.6;
+  const down=i=>cur[i] && !padPrev[i];
+  const hold=(i,delay,rate)=>{
+    if(!cur[i]) return false;
+    if(!padPrev[i]){ padHeld[i]=now+delay; return true; }
+    if(now>=padHeld[i]){ padHeld[i]=now+rate; return true; }
+    return false;
+  };
+  let acted=false; const act=f=>{ f(); acted=true; };
+  const g=gazeHit;
+  if(down(8)) act(()=> lib.open? closeBrowser() : openBrowser(selected));
+  if(down(10)) act(()=>{ autoHide=!autoHide; document.getElementById('autoHide').checked=autoHide; });
+  if(down(11)) act(()=>{ headCursor=!headCursor; hcEl.checked=headCursor; });
+  if(down(9)) act(()=>{ const v=visible().filter(x=>x.loaded); const anyPlaying=v.some(x=>!x.isPaused()); v.forEach(x=> anyPlaying? x.pause() : x.play()); v.forEach(x=>x.lastHover=now); });
+  if(lib.open){
+    if(down(0) && g && g.kind==='panel' && g.btn) browserClick(g.btn);
+    if(down(1)) browserBack();
+    if(hold(4,400,250)||hold(14,400,250)||hold(12,400,250)) turnPage(-1);
+    if(hold(5,400,250)||hold(15,400,250)||hold(13,400,250)) turnPage(1);
+    padPrev=cur; return;
+  }
+  if(down(14)) act(()=>cycle(-1));
+  if(down(15)) act(()=>cycle(1));
+  const s=slots[selected];
+  if(down(0)) act(()=>{ if(!g) s.toggle(); else if(g.btn || g.kind==='screen') activate(g); });
+  if(down(1)) act(()=>s.action('mute'));
+  if(down(2)) act(()=>s.action('solo'));
+  if(down(3)) act(()=>s.action('loop'));
+  if(hold(4,400,200)) act(()=>s.action('back'));
+  if(hold(5,400,200)) act(()=>s.action('fwd'));
+  if(hold(6,500,400)) act(()=>s.seek(s.video.currentTime-60));
+  if(hold(7,500,400)) act(()=>s.seek(s.video.currentTime+60));
+  if(hold(100,300,150)) act(()=>s.seek(s.video.currentTime-5));
+  if(hold(101,300,150)) act(()=>s.seek(s.video.currentTime+5));
+  if(hold(12,300,120)) act(()=>s.vol(0.05));
+  if(hold(13,300,120)) act(()=>s.vol(-0.05));
+  if(hold(102,200,120)) act(()=>s.resize(1.05));
+  if(hold(103,200,120)) act(()=>s.resize(1/1.05));
+  if(acted){ slots[selected].lastHover=now; slots[selected].barDirty=true; padEl.textContent='Controller connected. Screen '+(selected+1)+' is selected.'; }
+  padPrev=cur;
+}
+
+// ---------- loop ----------
+const tmpDir=new THREE.Vector3();
+renderer.setAnimationLoop(()=>{
+  const now=performance.now();
+  const hovered=new Map(); // slot -> hit
+  const panelHover=[];
+  if(swapFrom && (now>swapUntil || !swapFrom.group.visible)) endSwap();
+  if(needArrange) arrange();
+  updateGaze();
+  pollPad(now);
+
+  if(renderer.xr.isPresenting){
+    for(const st of controllers){
+      if(!st.source){ st.hit=null; st.dot.visible=false; st.line.visible=false; continue; }
+      st.line.visible=true;
+      tmpM.identity().extractRotation(st.c.matrixWorld);
+      st.rc.ray.origin.setFromMatrixPosition(st.c.matrixWorld);
+      st.rc.ray.direction.set(0,0,-1).applyMatrix4(tmpM);
+      const hit=raycastFrom(st.rc); st.hit=hit;
+      if(hit){ st.line.scale.z=hit.dist; st.dot.visible=true; st.dot.position.copy(st.rc.ray.origin).addScaledVector(st.rc.ray.direction,hit.dist);
+        const gp=st.source.gamepad;
+        if(hit.kind==='panel'){
+          panelHover.push(hit);
+          if(gp && gp.axes.length>=4 && now>st.nextStick && Math.abs(gp.axes[2])>0.7){ turnPage(gp.axes[2]>0?1:-1); st.nextStick=now+400; }
+          continue;
+        }
+        hovered.set(hit.slot,hit);
+        // thumbstick: skip / volume while pointing at a screen
+        if(gp && gp.axes.length>=4 && now>st.nextStick){
+          const ax=gp.axes[2], ay=gp.axes[3];
+          if(Math.abs(ax)>0.7){ hit.slot.action(ax>0?'fwd':'back'); st.nextStick=now+350; }
+          else if(Math.abs(ay)>0.7){ hit.slot.vol(ay<0?0.05:-0.05); st.nextStick=now+150; }
+        }
+      } else { st.line.scale.z=5; st.dot.visible=false; }
+    }
+  } else if(mouseActive && !dragging){
+    const hit=raycastFrom(mouseRay);
+    if(hit){ if(hit.kind==='panel') panelHover.push(hit); else hovered.set(hit.slot,hit); }
+    canvas.style.cursor = hit&&(hit.btn||hit.kind==='screen')? 'pointer':'grab';
+  }
+  if(gazeHit){ if(gazeHit.kind==='panel') panelHover.push(gazeHit); else if(!hovered.has(gazeHit.slot)) hovered.set(gazeHit.slot,gazeHit); }
+  const hk=(panelHover.find(h=>h.btn)||{btn:null}).btn;
+  const hkey=hk? hk.key : null;
+  if(hkey!==lib.hover){ lib.hover=hkey; lib.dirty=true; }
+  if(lib.open && lib.dirty) drawPanel();
+
+  for(const s of slots){
+    if(!s.group.visible) continue;
+    const h=hovered.get(s);
+    const nb = h&&h.kind==='bar'&&h.btn? (h.btn.id==='seek'? null : h.btn.id) : null;
+    const ns = h&&h.kind==='bar'&&h.btn&&h.btn.id==='seek'? h.btn.frac : null;
+    if(nb!==s.hoverBtn || ns!==s.hoverSeek){ s.hoverBtn=nb; s.hoverSeek=ns; s.barDirty=true; }
+    if(h && !(h.gaze && h.kind==='screen')) s.lastHover=now; // just looking at a screen shouldn't pop its bar up
+    if(s.barDirty || (!s.isPaused() && now-s.lastDraw>250)) s.drawBar();
+    if(swapFrom) s.frame.visible = s===swapFrom? now%700<450 : padActive && s.i===selected;
+    const show = !renderer.xr.isPresenting || !autoHide || now-s.lastHover<2500 || !s.loaded || !!swapFrom;
+    s.barMat.opacity += ((show?1:0) - s.barMat.opacity)*0.15;
+    if(s.photo && s.slidePlaying && now>=s.slideNext) s.advancePhoto();
+    const v=s.video;
+    // upload a new frame only when the video has moved on. Re-uploading every video at the headset's
+    // 80-90 fps (instead of the video's ~30) is heavy enough to stall decoding with several screens.
+    if(s.tex && v.readyState>=2 && v.currentTime!==s.lastT){ s.lastT=v.currentTime; s.tex.needsUpdate=true; }
+    // watchdog: if a playing video's clock hasn't moved for 3 s, nudge it (this unsticks a stalled decoder)
+    if(s.loaded && !v.paused && !v.ended && !v.seeking){
+      if(v.currentTime!==s.stallT){ s.stallT=v.currentTime; s.stallSince=now; }
+      else if(now-s.stallSince>3000){ s.stallSince=now; v.currentTime=v.currentTime+0.05; v.play().catch(()=>{}); }
+    } else s.stallSince=now;
+  }
+  if(measureEyeAt && now>measureEyeAt && renderer.xr.isPresenting){
+    measureEyeAt=0;
+    const y=new THREE.Vector3().setFromMatrixPosition(camera.matrixWorld).y - world.position.y;
+    if(y>0.6 && y<2.2){ eyeY=y; needArrange=true; }
+  }
+  renderer.render(scene,camera);
+});
+resize();
+loadRoots();
+// Chrome stops decoding the picture of videos (sound keeps going) when it thinks the page is hidden,
+// e.g. when its window is minimized. Say so, since that looks exactly like a freeze.
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden && slots.some(s=>!s.video.paused))
+    setStatus('Chrome treated this page as hidden (its window was minimized or completely covered by another window). Chrome can freeze the picture of hidden pages while the sound keeps playing. Keep at least part of the Chrome window showing on the desktop.');
+});
+})();
+</script>
+</body>
+</html>
