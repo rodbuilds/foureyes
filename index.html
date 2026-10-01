@@ -313,6 +313,7 @@ function rr(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w
 class Slot{
   constructor(i){
     this.i=i; this.color=SLOT_COLORS_DARK[i];
+    this.scales={}; // this screen's size in each layout, so layouts don't inherit each other's sizes
     this.mode='2d'; this.swap=false; this.scale=1; this.baseW=2; this.baseH=2*9/16; this.loaded=false; this.name='';
     this.lastHover=0; this.hoverBtn=null; this.hoverSeek=null; this.barDirty=true; this.lastDraw=0;
     this.sort='az'; // this screen's folder sort in the media browser
@@ -457,7 +458,7 @@ class Slot{
       return new Promise(r=>setTimeout(r, ms-(i? arr[i-1] : 0))).then(()=> tok===this.cropTry? this.autoCrop(true) : false);
     }), Promise.resolve(null));
   }
-  setScale(v){ this.scale=Math.max(0.2,Math.min(2.5,+v.toFixed(3))); this.updateSize(); this.syncUI(); }
+  setScale(v){ this.scale=Math.max(0.2,Math.min(2.5,+v.toFixed(3))); this.scales[layout]=this.scale; this.updateSize(); this.syncUI(); }
   // ----- playlist -----
   setList(list,cur){ this.list=list; this.buildOrder(cur); }
   buildOrder(cur){
@@ -916,7 +917,8 @@ photoSel.value=String(photoSecs);
 photoSel.onchange=()=>setPhotoSecs(+photoSel.value);
 function applyLayout(l){
   layout=l; const L=LAYOUTS[l], shown=new Set(L.rows.flat().map(p=>slotAt[p]));
-  slots.forEach((s,i)=>{ const on=shown.has(i); s.place(on,L.w,L.h||L.w*9/16); s.ui.el.hidden=!on; if(!on) s.pause(); });
+  // each layout starts with every screen the same size, and keeps any resizing (or Fit) done in it
+  slots.forEach((s,i)=>{ const on=shown.has(i); s.scale=s.scales[l]??1; s.place(on,L.w,L.h||L.w*9/16); s.syncUI(); s.ui.el.hidden=!on; if(!on) s.pause(); });
   arrange();
   document.querySelectorAll('#layoutSeg button').forEach(b=>b.setAttribute('aria-pressed', b.dataset.l===l));
   if(typeof selected==='number' && !slots[selected].group.visible) setSelected(0);
