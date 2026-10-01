@@ -10,6 +10,7 @@
 <style>
 :root{
   box-sizing:border-box;
+  color-scheme:light;
   padding-top:env(safe-area-inset-top,0px);
   padding-bottom:env(safe-area-inset-bottom,0px);
   --bg:#eef0f6; --panel:#ffffff; --panel2:#e3e6f0; --ink:#1b1d2c; --muted:#5d6180; --line:#cfd3e2;
@@ -20,12 +21,14 @@
 }
 @media (prefers-color-scheme:dark){
   :root:not([data-theme="light"]){
+    color-scheme:dark;
     --bg:#151829; --panel:#1f2338; --panel2:#282d47; --ink:#e9e8f2; --muted:#9a9eb9; --line:#343a5a;
     --btn:#2b3050; --btnh:#3a4066;
     --s1:#6fb3ff; --s2:#ff8fa3; --s3:#ffd166; --s4:#7ee0b0;
   }
 }
 :root[data-theme="dark"]{
+  color-scheme:dark;
   --bg:#151829; --panel:#1f2338; --panel2:#282d47; --ink:#e9e8f2; --muted:#9a9eb9; --line:#343a5a;
   --btn:#2b3050; --btnh:#3a4066;
   --s1:#6fb3ff; --s2:#ff8fa3; --s3:#ffd166; --s4:#7ee0b0;
@@ -43,6 +46,8 @@ h1 small{display:block;font:500 1rem/1.4 var(--body);color:var(--muted);margin-t
 .seg button+button{border-left:1px solid var(--line)}
 .seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
 button,select,input[type=text]{font:500 .95rem var(--body);color:var(--ink)}
+select{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px}
+select option{background:var(--panel);color:var(--ink)}
 button{background:var(--btn);border:1px solid transparent;border-radius:8px;padding:7px 12px;cursor:pointer}
 button:hover{background:var(--btnh)}
 button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--s1);outline-offset:2px}
@@ -1111,8 +1116,12 @@ const retRing=new THREE.Mesh(new THREE.RingGeometry(0.011,0.019,40),retMat);
 const retDot=new THREE.Mesh(new THREE.CircleGeometry(0.004,16),retMat);
 for(const m of [retOuter,retRing,retDot]){ m.renderOrder=999; reticle.add(m); }
 reticle.visible=false; scene.add(reticle);
+// Watching one screen's picture for CURSOR_HIDE_MS fades the ring out so it isn't in the way;
+// looking at anything else (its control bar, another screen, the browser, nothing) brings it back.
+const CURSOR_HIDE_MS=2500;
+let retAlpha=0, gazeKey='', gazeSince=0;
 function updateGaze(){
-  if(!headCursor || !(renderer.xr.isPresenting || padActive)){ gazeHit=null; gazeSlot=null; reticle.visible=false; return; }
+  if(!headCursor || !(renderer.xr.isPresenting || padActive)){ gazeHit=null; gazeSlot=null; gazeKey=''; reticle.visible=false; return; }
   if(!renderer.xr.isPresenting) camera.updateMatrixWorld();
   const o=gazeRC.ray.origin.setFromMatrixPosition(camera.matrixWorld);
   gazeRC.ray.direction.set(0,0,-1).transformDirection(camera.matrixWorld);
@@ -1123,7 +1132,12 @@ function updateGaze(){
   reticle.quaternion.setFromRotationMatrix(tmpM.extractRotation(camera.matrixWorld));
   reticle.scale.setScalar(d*(live? 1.35 : 1));
   retMat.color.set(live? (lib.open? SLOT_COLORS_DARK[lib.target] : gazeHit.slot? gazeHit.slot.color : '#ffffff') : '#c9cce0');
-  reticle.visible=true;
+  const key=gazeHit? gazeHit.kind+':'+(gazeHit.slot? gazeHit.slot.i : '') : 'none', now=performance.now();
+  if(key!==gazeKey){ gazeKey=key; gazeSince=now; }
+  const hide=!!(gazeHit && gazeHit.kind==='screen' && now-gazeSince>CURSOR_HIDE_MS);
+  retAlpha+=((hide? 0 : 1)-retAlpha)*(hide? 0.08 : 0.35); // fade out gently, come back quickly
+  retMat.opacity=retAlpha; retOuter.material.opacity=0.55*retAlpha;
+  reticle.visible=retAlpha>0.02; // A still clicks while it's hidden
   // looking at a screen selects it
   const gs=gazeHit && gazeHit.slot || null;
   if(gs && gs!==gazeSlot && padActive && gs.i!==selected) setSelected(gs.i);
