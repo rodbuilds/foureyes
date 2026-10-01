@@ -129,6 +129,7 @@ button:disabled{opacity:.5;cursor:not-allowed}
     <label><input type="checkbox" id="mipOn" checked> Smooth downscaling</label>
     <label>VR render <select id="xrScale" aria-label="VR render resolution"><option value="1">normal</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option></select></label>
     <label><input type="checkbox" id="pxOn"> Show sharpness</label>
+    <label><input type="checkbox" id="autoCropAll"> Auto-crop borders on every video and photo</label>
   </div>
 
   <section class="lib">
@@ -279,7 +280,7 @@ function bendScreen(mesh,w,on){
 // control bar: two rows on a 1200x208 canvas.
 // Top row: buttons, in groups (files | playback | sound | size, loop, swap).
 // Bottom row: seek slider, then the time (or photo count), then the file name.
-const BW=1200, BH=208, ROW2=112; // ROW2: where the bottom row starts
+const BW=1280, BH=208, ROW2=112; // ROW2: where the bottom row starts
 const SEEK = {x0:20, x1:600};
 const BUTTONS = [
   {id:'open', x:10,  w:92, label:'FILES'},
@@ -294,8 +295,9 @@ const BUTTONS = [
   {id:'solo', x:795, w:75, label:'SOLO'},
   {id:'sdn',  x:890, w:60, label:'S−'},
   {id:'sup',  x:955, w:60, label:'S+'},
-  {id:'loop', x:1020,w:72, label:'LOOP'},
-  {id:'swap', x:1097,w:88, label:'SWAP'}
+  {id:'crop', x:1020,w:80, label:'CROP'},
+  {id:'loop', x:1105,w:72, label:'LOOP'},
+  {id:'swap', x:1182,w:88, label:'SWAP'}
 ];
 // videos are kept in the page (tiny and invisible) rather than detached; Chrome is more willing
 // to throttle or suspend decoding of media elements that aren't in the document
@@ -313,6 +315,7 @@ class Slot{
     this.lastHover=0; this.hoverBtn=null; this.hoverSeek=null; this.barDirty=true; this.lastDraw=0;
     this.sort='az'; // this screen's folder sort in the media browser
     this.photo=null; this.slidePlaying=false; this.slideNext=0; this.photoTok=0; this.pre=null; // slideshow state
+    this.crop={...NO_CROP}; this.cropTry=0; // fractions cut from each edge of the picture (one eye's half, for 3D)
     this.list=null; this.order=null; this.pos=0; this.endMode='next'; // playlist: the folder the video came from
     this.lastT=-1; this.stallT=-1; this.stallSince=0;
     const v = this.video = document.createElement('video');
@@ -349,6 +352,7 @@ class Slot{
       for(const m of [this.mono,this.left,this.right]){ m.material.map=this.tex; m.material.needsUpdate=true; }
       this.loaded=true; this.applyMode(); this.err(''); this.syncUI();
       if(this.autoplay){ this.autoplay=false; this.play(); }
+      this.cropTry++; if(autoCropAll) this.autoCropSoon(this.cropTry);
     });
     v.addEventListener('error',()=>{
       this.err(v.src.startsWith('blob:') ? 'This file format can\'t be played by the browser. MP4 (H.264/H.265) or WebM usually work.'
@@ -366,9 +370,10 @@ class Slot{
   aspect(){
     const vw=this.photo? this.mw : this.video.videoWidth, vh=this.photo? this.mh : this.video.videoHeight;
     if(!vw||!vh) return 16/9;
+    const c=this.crop, k=(1-c.l-c.r)/(1-c.t-c.b);
     switch(this.mode){
-      case 'sbs': return (vw/2)/vh; case 'tb': return vw/(vh/2);
-      default: return vw/vh; // 2d, sbs-half, tb-half
+      case 'sbs': return (vw/2)/vh*k; case 'tb': return vw/(vh/2)*k;
+      default: return vw/vh*k; // 2d, sbs-half, tb-half
     }
   }
   applyMode(){
@@ -378,7 +383,10 @@ class Slot{
     if(this.mode.startsWith('sbs')){L=[0,.5,0,1];Rt=[.5,1,0,1];}
     if(this.mode.startsWith('tb')){L=[0,1,.5,1];Rt=[0,1,0,.5];}
     if(this.swap)[L,Rt]=[Rt,L];
-    setUV(this.left.geometry,...L); setUV(this.right.geometry,...Rt);
+    // crop inside each eye's part of the frame (v=1 is the top of the picture)
+    const c=this.crop, cut=([u0,u1,v0,v1])=>{ const du=u1-u0, dv=v1-v0; return [u0+du*c.l, u1-du*c.r, v0+dv*c.b, v1-dv*c.t]; };
+    setUV(this.mono.geometry,...cut([0,1,0,1]));
+    setUV(this.left.geometry,...cut(L)); setUV(this.right.geometry,...cut(Rt));
     this.updateSize();
   }
   updateSize(){
@@ -406,6 +414,49 @@ class Slot{
     const src=(this.photo? this.mw : this.video.videoWidth)/(this.mode.startsWith('sbs')? 2 : 1);
     return '≈ '+Math.round(deg*pxPerDeg)+' of '+Math.round(src)+' px  ·  '+deg.toFixed(0)+'°';
   }
+  // ----- crop -----
+  isCropped(){ const c=this.crop; return c.l+c.r+c.t+c.b>0.001; }
+  setCrop(c){
+    const k=v=>Math.max(0,Math.min(0.45,+v||0));
+    this.crop={l:k(c.l),r:k(c.r),t:k(c.t),b:k(c.b)};
+    this.applyMode(); this.barDirty=true; this.syncUI();
+  }
+  // right stick left/right: cut both sides in or out by hand (for borders auto-crop can't see, like blurred sides)
+  cropSides(d){
+    const c=this.crop; this.setCrop({...c, l:c.l+d, r:c.r+d});
+    this.flashMsg(this.isCropped()? 'Crop sides '+Math.round((this.crop.l+this.crop.r)*50)+'%' : 'Crop off');
+  }
+  // Find plain black or white borders and cut them. While a video plays it looks at three frames 0.7 s
+  // apart and keeps the smallest crop, so one dark frame can't eat into the picture. quiet: called
+  // automatically, so say nothing when there's nothing to crop.
+  async autoCrop(quiet){
+    if(!this.loaded) return false;
+    const tok=this.cropTry;
+    const eye= this.mode.startsWith('sbs')? [0,0,.5,1] : this.mode.startsWith('tb')? [0,0,1,.5] : [0,0,1,1];
+    const v=this.video, n= !this.photo && !v.paused? 3 : 1;
+    let best=null, seen=0;
+    for(let i=0;i<n;i++){
+      if(i) await new Promise(r=>setTimeout(r,700));
+      if(tok!==this.cropTry) return false; // the media changed meanwhile
+      let res=null;
+      try{
+        if(this.photo){ if(this.cur) res=detectBorders(this.cur.bmp,this.cur.bmp.width,this.cur.bmp.height,eye); }
+        else if(v.readyState>=2) res=detectBorders(v,v.videoWidth,v.videoHeight,eye);
+      }catch(e){ if(!quiet) this.flashMsg('Can\'t read this video\'s pixels'); return false; }
+      if(!res) continue; seen++;
+      best= best? {l:Math.min(best.l,res.l), r:Math.min(best.r,res.r), t:Math.min(best.t,res.t), b:Math.min(best.b,res.b)} : res;
+    }
+    if(!seen) return null; // every frame looked blank (a fade, a title card): try again later
+    if(best.l+best.r+best.t+best.b<0.001){ if(!quiet) this.flashMsg('No borders found. Right stick ←/→ crops by hand'); return false; }
+    this.setCrop(best); this.flashMsg('Cropped the borders'); return true;
+  }
+  // for auto-crop on load: first look 1.5 s in, then again at 6 s and 15 s if the picture was still blank
+  autoCropSoon(tok){
+    [1500,6000,15000].reduce((p,ms,i,arr)=>p.then(done=>{
+      if(done!==null || tok!==this.cropTry) return done;
+      return new Promise(r=>setTimeout(r, ms-(i? arr[i-1] : 0))).then(()=> tok===this.cropTry? this.autoCrop(true) : false);
+    }), Promise.resolve(null));
+  }
   setScale(v){ this.scale=Math.max(0.2,Math.min(2.5,+v.toFixed(3))); this.updateSize(); this.syncUI(); }
   // ----- playlist -----
   setList(list,cur){ this.list=list; this.buildOrder(cur); }
@@ -431,7 +482,7 @@ class Slot{
     catch(err){ this.err('Couldn\'t open '+e.name+': '+(err.message||err)); }
   }
   loadFile(f,keepList){
-    this.leavePhoto();
+    this.leavePhoto(); this.crop={...NO_CROP};
     if(!keepList) this.list=null;
     if(this.url) URL.revokeObjectURL(this.url);
     this.url=URL.createObjectURL(f); this.name=f.name; this.loaded=false;
@@ -439,7 +490,7 @@ class Slot{
   }
   loadURL(u){
     this.list=null; this.name=u.split('/').pop().split('?')[0]||u; this.loaded=false;
-    this.leavePhoto();
+    this.leavePhoto(); this.crop={...NO_CROP};
     this.video.crossOrigin='anonymous'; this.video.src=u; this.video.load(); this.syncUI();
   }
   toggle(){ if(!this.loaded) return; this.isPaused() ? this.play() : this.pause(); }
@@ -463,7 +514,9 @@ class Slot{
     const t=im.tex || (im.tex=photoTexture(im.bmp));
     for(const m of [this.mono,this.left,this.right]){ m.material.map=t; m.material.needsUpdate=true; }
     if(/\.jps$/i.test(e.name) && this.mode==='2d'){ this.mode='sbs'; this.swap=true; } // JPS is stored side by side, right eye first
+    this.crop={...NO_CROP}; this.cropTry++;
     this.name=e.name; this.loaded=true; this.applyMode(); this.err('');
+    if(autoCropAll) this.autoCrop(true);
     if(this.autoplay){ this.autoplay=false; this.slidePlaying=true; }
     this.slideNext=performance.now()+photoSecs*1000;
     this.barDirty=true; this.syncUI(); lib.dirty=true;
@@ -509,6 +562,7 @@ class Slot{
       case 'open': openBrowser(this.i); break;
       case 'prev': this.next(-1); break;
       case 'next': this.next(1); break;
+      case 'crop': if(this.isCropped()){ this.setCrop(NO_CROP); this.flashMsg('Crop off'); } else this.autoCrop(false); break;
       case 'swap': if(!swapFrom) startSwap(this); else if(swapFrom===this) endSwap(); else swapScreens(swapFrom,this); break;
       case 'play': this.toggle(); break;
       case 'back': this.photo? this.next(-1) : this.seek(v.currentTime-10); break;
@@ -538,7 +592,7 @@ class Slot{
     c.fillStyle=this.color; rr(c,0,0,10,BH,5); c.fill();
     c.textAlign='center'; c.textBaseline='middle';
     for(const b of BUTTONS){
-      let on = (b.id==='mute'&&v.muted)||(b.id==='loop'&&v.loop)||(b.id==='solo'&&!v.muted&&slots.every(s=>s===this||s.video.muted))||(b.id==='swap'&&swapFrom===this);
+      let on = (b.id==='mute'&&v.muted)||(b.id==='loop'&&v.loop)||(b.id==='solo'&&!v.muted&&slots.every(s=>s===this||s.video.muted))||(b.id==='swap'&&swapFrom===this)||(b.id==='crop'&&this.isCropped());
       const here = b.id==='swap' && swapFrom && swapFrom!==this; // the other screens offer themselves as the swap target
       c.globalAlpha = (b.id==='next'||b.id==='prev') && !(this.list&&this.list.length>1)? 0.4 : 1;
       c.fillStyle = here? swapFrom.color : on? this.color : (this.hoverBtn===b.id? '#454b72':'#262b45');
@@ -612,9 +666,20 @@ class Slot{
         <span class="lbl">Size</span><input type="range" min="20" max="250" value="100" data-r="size" aria-label="Screen size">
         <select data-r="swapwith" aria-label="Swap places with another screen"><option value="">Swap places with…</option></select>
       </div>
+      <div class="row">
+        <span class="lbl">Crop</span>
+        <button data-r="cropauto">Auto</button>
+        <span class="lbl">Sides</span><input type="range" min="0" max="45" value="0" data-r="cropx" aria-label="Crop sides">
+        <span class="lbl">Top/bottom</span><input type="range" min="0" max="45" value="0" data-r="cropy" aria-label="Crop top and bottom">
+        <button data-r="cropoff">No crop</button>
+      </div>
       <div class="err" data-r="err"></div>`;
     const q=s=>el.querySelector(`[data-r="${s}"]`);
-    this.ui={el,name:q('name'),play:q('play'),seek:q('seek'),time:q('time'),vol:q('vol'),mute:q('mute'),loop:q('loop'),rate:q('rate'),size:q('size'),err:q('err'),url:q('url'),endmode:q('endmode')};
+    this.ui={el,name:q('name'),play:q('play'),seek:q('seek'),time:q('time'),vol:q('vol'),mute:q('mute'),loop:q('loop'),rate:q('rate'),size:q('size'),err:q('err'),url:q('url'),endmode:q('endmode'),cropx:q('cropx'),cropy:q('cropy')};
+    q('cropauto').addEventListener('click',()=>this.autoCrop(false));
+    q('cropoff').addEventListener('click',()=>this.setCrop(NO_CROP));
+    this.ui.cropx.addEventListener('input',()=>{ const v=this.ui.cropx.value/100; this.setCrop({...this.crop,l:v,r:v}); });
+    this.ui.cropy.addEventListener('input',()=>{ const v=this.ui.cropy.value/100; this.setCrop({...this.crop,t:v,b:v}); });
     const sw=q('swapwith');
     const fillSwap=()=>{ sw.innerHTML='<option value="">Swap places with…</option>'+visible().filter(s=>s!==this).map(s=>`<option value="${s.i}">Screen ${s.i+1}</option>`).join(''); };
     sw.addEventListener('pointerdown',fillSwap); sw.addEventListener('focus',fillSwap);
@@ -647,6 +712,7 @@ class Slot{
     u.play.textContent = this.isPaused()? 'Play':'Pause';
     u.mute.classList.toggle('on',v.muted); u.loop.classList.toggle('on',v.loop);
     u.vol.value=Math.round(v.volume*100); u.size.value=Math.round(this.scale*100);
+    u.cropx.value=Math.round((this.crop.l+this.crop.r)*50); u.cropy.value=Math.round((this.crop.t+this.crop.b)*50);
     this.syncTime();
   }
   syncTime(){
@@ -746,6 +812,32 @@ function measurePx(){
     p=(bl.framebufferWidth/cam.cameras.length/xrScaleUsed)/(tr-tl)*Math.PI/180;
   } else p=(canvas.height/2)/Math.tan(camera.fov*Math.PI/360)*Math.PI/180;
   if(Math.abs(p-pxPerDeg)>0.5){ pxPerDeg=p; if(pxOn) slots.forEach(s=>s.barDirty=true); }
+}
+// ---- crop ----
+const NO_CROP={l:0,r:0,t:0,b:0};
+let autoCropAll=false;
+document.getElementById('autoCropAll').onchange=e=>{ autoCropAll=e.target.checked; if(autoCropAll) visible().forEach(s=>{ if(s.loaded && !s.isCropped()) s.autoCrop(true); }); };
+// Find plain borders in one frame: shrink it to 160x90, then walk in from each edge while the whole
+// column (or row) is a flat near-black or near-white. eye = the part of the frame to look at, as
+// [x0,y0,x1,y1] fractions with the origin at the top left. Returns null for a frame that's all border.
+const cropCanvas=document.createElement('canvas'); cropCanvas.width=160; cropCanvas.height=90;
+const cropCtx=cropCanvas.getContext('2d',{willReadFrequently:true});
+function detectBorders(src,sw,sh,eye){
+  const W=160, H=90;
+  cropCtx.drawImage(src, eye[0]*sw, eye[1]*sh, (eye[2]-eye[0])*sw, (eye[3]-eye[1])*sh, 0,0,W,H);
+  const d=cropCtx.getImageData(0,0,W,H).data; // throws for cross-origin video without CORS
+  const lum=(x,y)=>{ const i=(y*W+x)*4; return 0.299*d[i]+0.587*d[i+1]+0.114*d[i+2]; };
+  const flat=(len,get)=>{ let s=0,s2=0; for(let k=0;k<len;k++){ const v=get(k); s+=v; s2+=v*v; }
+    const m=s/len, sd=Math.sqrt(Math.max(0,s2/len-m*m)); return (m<30 || m>225) && sd<9; };
+  const col=x=>flat(H,y=>lum(x,y)), row=y=>flat(W,x=>lum(x,y));
+  let l=0; while(l<W*0.45 && col(l)) l++;
+  let r=0; while(r<W*0.45 && col(W-1-r)) r++;
+  let t=0; while(t<H*0.45 && row(t)) t++;
+  let b=0; while(b<H*0.45 && row(H-1-b)) b++;
+  if(l+r>W*0.85 || t+b>H*0.85) return null;
+  // ignore slivers; otherwise cut half a sample further in, so a soft edge line doesn't show
+  const fr=(px,len)=> px<len*0.02? 0 : Math.min(0.45,(px+0.5)/len);
+  return {l:fr(l,W), r:fr(r,W), t:fr(t,H), b:fr(b,H)};
 }
 document.getElementById('curveOn').onchange=e=>{ curved=e.target.checked; slots.forEach(s=>s.updateSize()); };
 document.getElementById('fitView').onclick=()=>fitInView(+document.getElementById('fitDeg').value);
@@ -1350,7 +1442,7 @@ function pollPad(now){
   const cur=gp.buttons.map(b=>b.pressed || b.value>0.5);
   const ax=gp.axes||[];
   // virtual buttons for sticks
-  cur[100]=ax[0]<-0.6; cur[101]=ax[0]>0.6; cur[102]=ax[3]<-0.6; cur[103]=ax[3]>0.6;
+  cur[100]=ax[0]<-0.6; cur[101]=ax[0]>0.6; cur[102]=ax[3]<-0.6; cur[103]=ax[3]>0.6; cur[104]=ax[2]<-0.6; cur[105]=ax[2]>0.6;
   const down=i=>cur[i] && !padPrev[i];
   const hold=(i,delay,rate)=>{
     if(!cur[i]) return false;
@@ -1388,6 +1480,8 @@ function pollPad(now){
   if(hold(13,300,120)) act(()=>s.vol(-0.05));
   if(hold(102,200,120)) act(()=>s.resize(1.05));
   if(hold(103,200,120)) act(()=>s.resize(1/1.05));
+  if(hold(105,250,90)) act(()=>s.cropSides(0.01));  // right stick right: crop the sides in
+  if(hold(104,250,90)) act(()=>s.cropSides(-0.01)); // right stick left: back out
   if(acted){ slots[selected].lastHover=now; slots[selected].barDirty=true; padEl.textContent='Controller connected. Screen '+(selected+1)+' is selected.'; }
   padPrev=cur;
 }
