@@ -120,21 +120,16 @@ button:disabled{opacity:.5;cursor:not-allowed}
     <button id="pauseAll">Pause all</button>
     <button id="restartAll">Restart all together</button>
     <button id="muteAll">Mute all</button>
-    <label><input type="checkbox" id="autoHide" checked> Hide control bars in VR until you point at a screen</label>
-    <label><input type="checkbox" id="linkSize"> Same size for all screens</label>
-    <label>Each photo shows for <select id="photoSecs" aria-label="Seconds per photo in slideshows"></select></label>
-    <label><input type="checkbox" id="headCursor" checked> Head cursor (look at something, press A to click it)</label>
-  </div>
-  <div class="global" id="experiments">
-    <strong>Experiments:</strong>
-    <label><input type="checkbox" id="curveOn"> Curved screens</label>
-    <button id="fitView">Fit all in view</button>
-    <select id="fitDeg" aria-label="Fit within"><option value="60">within 60°</option><option value="75" selected>within 75°</option><option value="90">within 90°</option></select>
+    <button id="fitView" title="Shrink every screen together so they all fit within 90°">Fit all in view</button>
+    <label><input type="checkbox" id="curveOn" checked> Curved screens</label>
     <label><input type="checkbox" id="focusOn"> Focus zoom (the screen you look at comes closer)</label>
-    <label><input type="checkbox" id="mipOn" checked> Smooth downscaling</label>
-    <label>VR render <select id="xrScale" aria-label="VR render resolution"><option value="1">normal</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option></select></label>
-    <label><input type="checkbox" id="pxOn"> Show sharpness</label>
+    <label><input type="checkbox" id="linkSize"> Same size for all screens</label>
+    <label><input type="checkbox" id="autoHide" checked> Hide control bars in VR until you look at a screen</label>
+    <label><input type="checkbox" id="headCursor" checked> Head cursor (look at something, press A to click it)</label>
+    <label><input type="checkbox" id="cropBtn"> CROP button on screen bars</label>
     <label><input type="checkbox" id="autoCropAll"> Auto-crop borders on every video and photo</label>
+    <label>Each photo shows for <select id="photoSecs" aria-label="Seconds per photo in slideshows"></select></label>
+    <label>VR render <select id="xrScale" aria-label="VR render resolution" title="Sharper, but harder on the graphics card. Takes effect the next time you press Enter VR."><option value="1">normal</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option></select></label>
   </div>
 
   <section class="lib">
@@ -165,12 +160,16 @@ button:disabled{opacity:.5;cursor:not-allowed}
       <dt>X</dt><dd>Solo this screen's sound (mutes the others)</dd>
       <dt>Y</dt><dd>Loop on or off</dd>
       <dt>Right stick up / down</dt><dd>Make the screen bigger or smaller</dd>
+      <dt>Right stick left / right</dt><dd>Crop the sides of the picture in or out (for empty borders)</dd>
       <dt>Menu button</dt><dd>Play or pause all screens</dd>
       <dt>Left stick click</dt><dd>Keep control bars always visible, or let them fade</dd>
       <dt>Right stick click</dt><dd>Show or hide the head cursor</dd>
     </dl>
-    <p>In the media browser: A opens the folder or plays the video under the head cursor, B goes back up a folder (or closes the browser), LB / RB or the D-pad turn pages. Use "Load to screen" on the left to pick which screen the video goes to, and "Format" for 3D videos (SBS = side by side, OU = over/under, ½ = half-width).</p>
+    <p>In the media browser: A opens the folder or plays the video under the head cursor, B goes back up a folder (or closes the browser), LB / RB or the D-pad turn pages. Each screen remembers where it was in the browser. ⚙ Settings (top left of the browser) has the layout, curved screens, focus zoom, fit all in view, and the other options on this page, so you can change them without taking the headset off. Use "Load to screen" on the left to pick which screen the video goes to, and "Format" for 3D videos (SBS = side by side, OU = over/under, ½ = half-width).</p>
     <p>Picking a video makes the rest of its folder that screen's playlist. "When a video ends" (in the browser, or on the screen's card) chooses whether it stops, plays the next video in the folder, or plays the folder in random order. PLAY ALL and SHUFFLE at the top of the browser start the whole folder, and NEXT on a screen's control bar skips ahead.</p>
+    <p>Each screen's control bar has two rows: FILES, PREV −10 ▶ +10 NEXT, MUTE V− V+ SOLO, S− S+ LOOP SWAP on top, and the seek bar, time and file name underneath.</p>
+    <p>Focus zoom (a setting): the screen you look at slides toward you so it's bigger and sharper, and stays that way while you use its control bar. Fit all in view shrinks every screen together so they all fit within 90° in front of you. Curved screens (on by default) wrap each screen around you so its edges don't stretch.</p>
+    <p>Cropping empty borders: turn on "CROP button on screen bars" and press CROP while the video plays. It looks for plain borders that stay still while the picture moves, of any colour. Press it again to undo. Right stick left / right, or the sliders on a screen's card, crop by hand. "Auto-crop every video" does this whenever something new loads. In the 3 wide and 4 wide layouts a cropped picture grows to fill the height.</p>
     <p>To rearrange screens, press SWAP on one screen's control bar (its frame blinks), then look at another screen and press A, or press that screen's SWAP button, which now reads HERE. The two trade places and keep playing. Press SWAP again to cancel; it also cancels itself after 15 seconds. On the PC, use "Swap places with…" on a screen's card.</p>
     <p>Photos: folders list your photos (JPG, PNG, WebP, GIF, AVIF, and JPS 3D photos) alongside videos. Pick one and that screen plays a slideshow of the folder's photos. Play/pause starts and stops it; "Each photo shows for" on the page, or T− / T+ on the screen's control bar (D-pad up/down on the controller), sets how long each photo stays. −10 / +10 and LB / RB go to the previous or next photo, and the seek bar jumps through the folder. The screen keeps its 3D format (SBS, OU, L⇄R) from photo to photo. JPS files switch to SBS with the eyes swapped automatically, since that's how they're stored. When a slideshow reaches the last photo it stops, unless LOOP is on; SHUFFLE plays the photos in random order.</p>
     <p>If the picture freezes while the sound keeps going: Chrome pauses video pictures when it thinks the page is hidden. Don't minimize the Chrome window or cover it completely with another window while you're in VR.</p>
@@ -198,13 +197,12 @@ let layout = '2';
 let linkSize = false, needArrange = true;
 const NO_CROP = {l:0,r:0,t:0,b:0}; // defined up here because every screen starts with it when it's created
 let autoCropAll = false; // crop borders automatically on every new video and photo
+let showCropBtn = false; // CROP on each screen's control bar is optional
 // ---- experiments (branch experiment/curved-screens) ----
-let curved = false;      // screens bend onto the cylinder of radius R around you
+let curved = true;       // screens bend onto the cylinder of radius R around you
 let focusOn = false;     // the screen you look at slides toward you
 const FOCUS_Z = 1.5;     // how much closer (and so how much bigger and sharper) the focused screen gets
-let mipOn = true;        // mipmapped video textures: smooth instead of shimmery when a screen is small
-let pxOn = false;        // show estimated headset pixels per screen on its bar
-let pxPerDeg = 0;        // estimated rendered pixels per degree near the centre of view
+const mipOn = true;      // mipmapped video textures: smooth instead of shimmery when a screen is small
 const SCREEN_SEG = 48;   // columns in each screen mesh, so it can bend smoothly
 const PHOTO_STEPS = [1,2,3,4,5,7,10,15,20,30,45,60,120];
 let photoSecs = 5; // how long each photo in a slideshow stays up, shared by every screen
@@ -289,23 +287,20 @@ function bendScreen(mesh,w,on){
 // Bottom row: seek slider, then the time (or photo count), then the file name.
 const BW=1280, BH=208, ROW2=112; // ROW2: where the bottom row starts
 const SEEK = {x0:20, x1:600};
-const BUTTONS = [
-  {id:'open', x:10,  w:92, label:'FILES'},
-  {id:'prev', x:122, w:84, label:'PREV'},
-  {id:'back', x:211, w:80, label:'−10'},
-  {id:'play', x:296, w:90, label:'▶'},
-  {id:'fwd',  x:391, w:80, label:'+10'},
-  {id:'next', x:476, w:84, label:'NEXT'},
-  {id:'mute', x:580, w:80, label:'MUTE'},
-  {id:'vdn',  x:665, w:60, label:'V−'},
-  {id:'vup',  x:730, w:60, label:'V+'},
-  {id:'solo', x:795, w:75, label:'SOLO'},
-  {id:'sdn',  x:890, w:60, label:'S−'},
-  {id:'sup',  x:955, w:60, label:'S+'},
-  {id:'crop', x:1020,w:80, label:'CROP'},
-  {id:'loop', x:1105,w:72, label:'LOOP'},
-  {id:'swap', x:1182,w:88, label:'SWAP'}
+// [id, width, label] in groups; a wider gap separates groups. CROP only shows when that setting is on.
+const BTN_GROUPS = [
+  [['open',92,'FILES']],
+  [['prev',84,'PREV'],['back',80,'−10'],['play',90,'▶'],['fwd',80,'+10'],['next',84,'NEXT']],
+  [['mute',80,'MUTE'],['vdn',60,'V−'],['vup',60,'V+'],['solo',75,'SOLO']],
+  [['sdn',60,'S−'],['sup',60,'S+'],['crop',80,'CROP'],['loop',72,'LOOP'],['swap',88,'SWAP']]
 ];
+let barButtons = [];
+function layoutBarButtons(){
+  barButtons=[]; let x=10;
+  BTN_GROUPS.forEach((g,gi)=>{ if(gi) x+=15;
+    for(const [id,w,label] of g){ if(id==='crop' && !showCropBtn) continue; barButtons.push({id,x,w,label}); x+=w+5; } });
+}
+layoutBarButtons();
 // videos are kept in the page (tiny and invisible) rather than detached; Chrome is more willing
 // to throttle or suspend decoding of media elements that aren't in the document
 const videoHost=document.createElement('div');
@@ -412,14 +407,6 @@ class Slot{
   place(on,baseW,baseH){
     this.group.visible=on; if(!on) return;
     this.baseW=baseW; this.baseH=baseH; this.updateSize();
-  }
-  // "≈ 610 of 1920 px": roughly how many headset pixels the picture gets across, vs. what one eye's
-  // view of the video holds. The gap between the two is detail you can't see at this size.
-  sharpText(){
-    const d=R/this.zoom, w=this.dims.vw;
-    const deg=(curved? w/d : 2*Math.atan(w/(2*d)))*180/Math.PI;
-    const src=(this.photo? this.mw : this.video.videoWidth)/(this.mode.startsWith('sbs')? 2 : 1);
-    return '≈ '+Math.round(deg*pxPerDeg)+' of '+Math.round(src)+' px  ·  '+deg.toFixed(0)+'°';
   }
   // ----- crop -----
   isCropped(){ const c=this.crop; return c.l+c.r+c.t+c.b>0.001; }
@@ -594,7 +581,7 @@ class Slot{
   hitBar(uv){
     const x=uv.x*BW, y=(1-uv.y)*BH;
     if(y>=ROW2) return x>=SEEK.x0 && x<=SEEK.x1? {id:'seek', frac:Math.max(0,Math.min(1,(x-SEEK.x0-10)/(SEEK.x1-SEEK.x0-20)))} : null;
-    const b=BUTTONS.find(b=>x>=b.x && x<=b.x+b.w); return b?{id:b.id}:null;
+    const b=barButtons.find(b=>x>=b.x && x<=b.x+b.w); return b?{id:b.id}:null;
   }
   // a short message in the bar's name area, e.g. after changing the volume
   flashMsg(t){ this.flash=t; this.flashUntil=performance.now()+1500; this.barDirty=true; }
@@ -604,7 +591,7 @@ class Slot{
     c.fillStyle='rgba(14,16,28,0.92)'; rr(c,0,0,BW,BH,26); c.fill();
     c.fillStyle=this.color; rr(c,0,0,10,BH,5); c.fill();
     c.textAlign='center'; c.textBaseline='middle';
-    for(const b of BUTTONS){
+    for(const b of barButtons){
       let on = (b.id==='mute'&&v.muted)||(b.id==='loop'&&v.loop)||(b.id==='solo'&&!v.muted&&slots.every(s=>s===this||s.video.muted))||(b.id==='swap'&&swapFrom===this)||(b.id==='crop'&&this.isCropped());
       const here = b.id==='swap' && swapFrom && swapFrom!==this; // the other screens offer themselves as the swap target
       c.globalAlpha = (b.id==='next'||b.id==='prev') && !(this.list&&this.list.length>1)? 0.4 : 1;
@@ -635,7 +622,6 @@ class Slot{
     if(this.flashUntil && performance.now()>this.flashUntil) this.flashUntil=0;
     let info, col='#9a9eb9';
     if(this.flashUntil){ info=this.flash; col=this.color; }
-    else if(pxOn && pxPerDeg && this.loaded) info=this.sharpText();
     else {
       const pl=this.list&&this.list.length>1? (this.pos+1)+'/'+this.list.length+(this.endMode==='shuffle'?' shuffled':'')+'  ·  ' : '';
       info=this.name? pl+this.name.replace(/\.[^.]+$/,'') : 'Screen '+(this.i+1);
@@ -770,7 +756,7 @@ function fitInView(deg){
   visible().forEach(s=>s.setScale(s.scale*lo));
   const sp=layoutSpan(1);
   setStatus(`Fitted: the screens now cover ${sp.h.toFixed(0)}° across and ${sp.v.toFixed(0)}° up and down.`+
-    (pxPerDeg? '' : ' Turn on "Show sharpness" in VR to see what that costs each screen.'));
+    '');
 }
 // Video textures: with mipmaps, a big video on a small screen is averaged down smoothly instead of
 // skipping pixels, which is what makes small screens shimmer and crawl.
@@ -812,26 +798,10 @@ function updateFocus(now){
     s.zoom+=(target-s.zoom)*0.12; if(Math.abs(target-s.zoom)<0.002) s.zoom=target;
     const z=s.zoom, b=s.basePos;
     s.group.position.set(b.x/z, eyeY+(b.y-eyeY)/z, b.z/z); // along the line to your eyes
-    if(pxOn) s.barDirty=true;
   }
 }
-// Sharpness readout: how many pixels per degree the headset renders near the centre of view (at normal
-// render quality), from the eye's projection and the framebuffer size. An estimate: lenses spread
-// pixels unevenly and headsets render above their panel resolution.
-let xrScaleUsed=1;
-function measurePx(){
-  let p=0;
-  if(renderer.xr.isPresenting){
-    const cam=renderer.xr.getCamera(camera), c0=cam.cameras && cam.cameras[0], ses=renderer.xr.getSession();
-    const bl=ses && ses.renderState.baseLayer; if(!c0 || !bl) return;
-    const P=c0.projectionMatrix.elements, tl=(P[8]-1)/P[0], tr=(P[8]+1)/P[0];
-    if(!(tr>tl)) return;
-    p=(bl.framebufferWidth/cam.cameras.length/xrScaleUsed)/(tr-tl)*Math.PI/180;
-  } else p=(canvas.height/2)/Math.tan(camera.fov*Math.PI/360)*Math.PI/180;
-  if(Math.abs(p-pxPerDeg)>0.5){ pxPerDeg=p; if(pxOn) slots.forEach(s=>s.barDirty=true); }
-}
+let xrScaleUsed=1; // the VR render resolution in use (set when entering VR)
 // ---- crop ----
-document.getElementById('autoCropAll').onchange=e=>{ autoCropAll=e.target.checked; if(autoCropAll) visible().forEach(s=>{ if(s.loaded && !s.isCropped()) s.autoCrop(true); }); };
 // Border detection works on small greyscale samples of one eye's part of the frame.
 // eye = [x0,y0,x1,y1] as fractions with the origin at the top left.
 const CW=160, CH=90;
@@ -871,11 +841,7 @@ function findBorders(S){
   const fr=(px,len)=> px<len*0.02? 0 : Math.min(0.45,(px+0.5)/len);
   return {l:fr(l,W), r:fr(r,W), t:fr(t,H), b:fr(b,H)};
 }
-document.getElementById('curveOn').onchange=e=>{ curved=e.target.checked; slots.forEach(s=>s.updateSize()); };
-document.getElementById('fitView').onclick=()=>fitInView(+document.getElementById('fitDeg').value);
-document.getElementById('focusOn').onchange=e=>{ focusOn=e.target.checked; };
-document.getElementById('mipOn').onchange=e=>{ mipOn=e.target.checked; slots.forEach(s=>{ if(s.tex) setVideoFiltering(s.tex); }); };
-document.getElementById('pxOn').onchange=e=>{ pxOn=e.target.checked; slots.forEach(s=>s.barDirty=true); };
+document.getElementById('fitView').onclick=()=>fitInView(90);
 function arrange(){
   needArrange=false;
   const L=LAYOUTS[layout], rows=L.rows.map(r=>r.map(p=>slots[slotAt[p]]));
@@ -942,8 +908,6 @@ document.getElementById('playAll').onclick=()=>visible().forEach(s=>s.play());
 document.getElementById('pauseAll').onclick=()=>visible().forEach(s=>s.pause());
 document.getElementById('restartAll').onclick=()=>visible().forEach(s=>{ if(s.photo){ s.pos=0; s.autoplay=true; s.next(0); } else if(s.loaded){s.video.currentTime=0; s.play();} });
 document.getElementById('muteAll').onclick=()=>slots.forEach(s=>s.video.muted=true);
-document.getElementById('autoHide').onchange=e=>autoHide=e.target.checked;
-document.getElementById('linkSize').onchange=e=>{ linkSize=e.target.checked; if(linkSize) sizeTo(slots[selected],slots[selected].scale); };
 
 // ---------- raycasting ----------
 function targets(){ const t=[]; if(lib.open) t.push(panel); for(const s of visible()) t.push(s.bar, s.mode==='2d'? s.mono : s.left); return t; }
@@ -1196,7 +1160,7 @@ async function openRoot(r){
   }
   lib.path=[r.node]; refreshDir();
 }
-function browserBack(){ if(lib.path.length){ lib.path.pop(); refreshDir(); } else closeBrowser(); }
+function browserBack(){ if(lib.view==='settings'){ lib.view='files'; lib.dirty=true; return; } if(lib.path.length){ lib.path.pop(); refreshDir(); } else closeBrowser(); }
 function turnPage(d){ const p=Math.max(0,Math.min(pageCount()-1,lib.page+d)); if(p!==lib.page){ lib.page=p; lib.dirty=true; queueThumbs(); } }
 function applyFmt(){ const s=slots[lib.target]; s.mode=lib.mode; s.swap=lib.swap; s.applyMode(); }
 function setTarget(i){
@@ -1220,8 +1184,13 @@ function browserClick(b){
   switch(b.id){
     case 'close': closeBrowser(); break;
     case 'up': browserBack(); break;
-    case 'home': lib.path=[]; refreshDir(); break;
-    case 'root': openRoot(lib.roots[b.data]); break;
+    case 'home': lib.view='files'; lib.path=[]; refreshDir(); break;
+    case 'settings': lib.view='settings'; break;
+    case 'set': setSetting(b.data,!SETTINGS[b.data].get()); break;
+    case 'layout': applyLayout(b.data); break;
+    case 'fit': fitInView(90); break;
+    case 'psecs': stepPhotoSecs(b.data); break;
+    case 'root': lib.view='files'; openRoot(lib.roots[b.data]); break;
     case 'tile': { const e=pageEntries()[b.data]; if(!e) break;
       if(e.root) openRoot(e.root); else if(e.kind==='dir'){ lib.path.push(e); refreshDir(); } else playFromFolder(e); break; }
     case 'target': setTarget(b.data); break;
@@ -1297,17 +1266,19 @@ function drawPanel(){
   // title bar
   c.fillStyle='#181c2f'; rr(c,0,0,PW,120,36); c.fill(); c.fillRect(0,60,PW,60);
   c.fillStyle=acc; c.fillRect(0,118,PW,4);
-  c.fillStyle='#e9e8f2'; c.font='700 60px '+DISP; c.textAlign='left'; c.textBaseline='middle'; c.fillText('MEDIA',40,64);
-  btn('up','▲  UP',440,24,150,72,{dis:!lib.path.length});
+  const settings=lib.view==='settings';
+  c.fillStyle='#e9e8f2'; c.font='700 60px '+DISP; c.textAlign='left'; c.textBaseline='middle'; c.fillText(settings? 'SETTINGS' : 'MEDIA',40,64);
+  btn('up','▲  UP',440,24,150,72,{dis:settings || !lib.path.length});
   c.fillStyle='#e9e8f2'; c.font='600 34px '+BODY; c.textAlign='left';
-  c.fillText(fitLeft(c,['Places',...lib.path.map(n=>n.name)].join('  ›  '),880),620,62);
-  const noFiles=!lib.entries.some(isPlayable);
+  c.fillText(settings? 'Settings' : fitLeft(c,['Places',...lib.path.map(n=>n.name)].join('  ›  '),880),620,62);
+  const noFiles=settings || !lib.entries.some(isPlayable);
   btn('playall','▶  PLAY ALL',1520,24,200,72,{dis:noFiles});
   btn('shuffleall','⤮  SHUFFLE',1730,24,200,72,{dis:noFiles});
   btn('close','✕',1940,24,84,72);
 
   // sidebar
-  btn('home','⌂  Places',40,146,364,70,{on:!lib.path.length,left:true,font:'600 32px '+BODY});
+  btn('home','⌂  Places',40,146,177,70,{on:!settings && !lib.path.length,left:true,font:'600 30px '+BODY});
+  btn('settings','⚙  Settings',227,146,177,70,{on:settings,left:true,font:'600 30px '+BODY});
   lib.roots.slice(0,5).forEach((r,i)=>
     btn('root',(r.perm!=='granted'&&!r.temp? '⚠ ':'')+r.name,40,226+i*80,364,70,{data:i,on:lib.path[0]===r.node,left:true,font:'600 30px '+BODY}));
   label('LOAD TO SCREEN',40,680);
@@ -1320,8 +1291,9 @@ function drawPanel(){
   [['stop','STOP'],['next','NEXT'],['shuffle','SHUFFLE']].forEach(([m,t],k)=>
     btn('end',t,40+k*125,1058,114,72,{data:m,on:slots[lib.target].endMode===m}));
 
-  // grid
+  // grid (or the settings)
   const GX=440, GY=140, TW=378, TH=292, GAP=24;
+  if(settings){ drawSettings(c,btn,acc); panelTex.needsUpdate=true; lib.dirty=false; return; }
   const list=pageEntries();
   if(!list.length && lib.msg){
     c.fillStyle='#9a9eb9'; c.font='500 36px '+BODY; c.textAlign='center'; c.textBaseline='middle';
@@ -1378,9 +1350,50 @@ function drawPanel(){
   panelTex.needsUpdate=true; lib.dirty=false;
 }
 
+// The Settings page of the VR media browser: two columns of large rows, easy to hit with the head
+// cursor. A whole row toggles its setting; rows with buttons act through the buttons.
+function drawSettings(c,btn,acc){
+  const COLS=[{x:440,title:'VIEW'},{x:1250,title:'CONTROLS'}], CW=774, RH=104, GAP=14, Y0=196;
+  const row=(col,i,label,hint)=>{
+    const x=COLS[col].x, y=Y0+i*(RH+GAP);
+    c.fillStyle='#1a1e33'; rr(c,x,y,CW,RH,18); c.fill();
+    c.textAlign='left'; c.textBaseline='middle';
+    c.fillStyle='#e9e8f2'; c.font='600 34px '+BODY; c.fillText(label,x+28,hint? y+38 : y+RH/2);
+    if(hint){ c.fillStyle='#9a9eb9'; c.font='500 24px '+BODY; c.fillText(hint,x+28,y+76); }
+    return {x,y};
+  };
+  const toggle=(col,i,k)=>{
+    const st=SETTINGS[k], on=st.get(), key='set:'+k, hov=lib.hover===key;
+    const {x,y}=row(col,i,st.label,st.hint);
+    if(hov){ c.strokeStyle=acc; c.lineWidth=5; rr(c,x+2,y+2,CW-4,RH-4,16); c.stroke(); }
+    c.fillStyle=on? acc : '#262b45'; rr(c,x+CW-178,y+20,150,64,32); c.fill();
+    c.fillStyle=on? '#10121f' : '#9a9eb9'; c.font='700 32px '+DISP; c.textAlign='center'; c.fillText(on? 'ON' : 'OFF',x+CW-103,y+54);
+    lib.rects.push({x,y,w:CW,h:RH,id:'set',data:k,key});
+  };
+  c.fillStyle='#9a9eb9'; c.font='600 26px '+BODY; c.textAlign='left'; c.textBaseline='middle';
+  for(const col of COLS) c.fillText(col.title,col.x+4,166);
+  // VIEW
+  { const {x,y}=row(0,0,'Layout');
+    [['1','1'],['2','2'],['3arc','3 wide'],['4grid','4 grid'],['4arc','4 wide']].reduce((bx,[l,t])=>{
+      const w=t.length>1? 118 : 70; btn('layout',t,bx,y+18,w,68,{data:l,on:layout===l}); return bx+w+10; }, x+CW-28-(70*2+118*3+40)); }
+  toggle(0,1,'curved');
+  toggle(0,2,'focus');
+  { const {x,y}=row(0,3,'Fit all in view','Shrink every screen to fit within 90°'); btn('fit','FIT',x+CW-178,y+20,150,64); }
+  toggle(0,4,'linkSize');
+  // CONTROLS
+  toggle(1,0,'headCursor');
+  toggle(1,1,'autoHide');
+  toggle(1,2,'cropBtn');
+  toggle(1,3,'autoCrop');
+  { const {x,y}=row(1,4,'Each photo shows for','In slideshows, on every screen');
+    btn('psecs','−',x+CW-318,y+20,80,64,{data:-1});
+    c.fillStyle='#e9e8f2'; c.font='700 34px '+DISP; c.textAlign='center'; c.fillText(photoSecs+' s',x+CW-193,y+54);
+    btn('psecs','+',x+CW-148,y+20,80,64,{data:1}); }
+  c.fillStyle='#9a9eb9'; c.font='500 24px '+BODY; c.textAlign='left';
+  c.fillText('VR render resolution is on the page; it takes effect the next time you press Enter VR.',440,Y0+5*(RH+GAP)+30);
+}
 // ---------- head cursor ----------
 let headCursor=true, gazeHit=null, gazeSlot=null;
-const hcEl=document.getElementById('headCursor'); hcEl.onchange=()=>headCursor=hcEl.checked;
 const gazeRC=new THREE.Raycaster();
 const reticle=new THREE.Group();
 const retMat=new THREE.MeshBasicMaterial({color:0xffffff,depthTest:false,transparent:true});
@@ -1502,8 +1515,8 @@ function pollPad(now){
   let acted=false; const act=f=>{ f(); acted=true; };
   const g=gazeHit;
   if(down(8)) act(()=> lib.open? closeBrowser() : openBrowser(selected));
-  if(down(10)) act(()=>{ autoHide=!autoHide; document.getElementById('autoHide').checked=autoHide; });
-  if(down(11)) act(()=>{ headCursor=!headCursor; hcEl.checked=headCursor; });
+  if(down(10)) act(()=>setSetting('autoHide',!autoHide));
+  if(down(11)) act(()=>setSetting('headCursor',!headCursor));
   if(down(9)) act(()=>{ const v=visible().filter(x=>x.loaded); const anyPlaying=v.some(x=>!x.isPaused()); v.forEach(x=> anyPlaying? x.pause() : x.play()); v.forEach(x=>x.lastHover=now); });
   if(lib.open){
     if(down(0) && g && g.kind==='panel' && g.btn) browserClick(g.btn);
@@ -1538,6 +1551,35 @@ function pollPad(now){
 
 // ---------- loop ----------
 const tmpDir=new THREE.Vector3();
+// ---------- settings ----------
+// One place for every on/off setting, so the page's checkboxes and the Settings page in the VR media
+// browser always agree. Defined last, once every variable here exists.
+const SETTINGS = {
+  curved:     {el:'curveOn',    label:'Curved screens',              hint:'Screens wrap around you, so the edges don\'t stretch',
+               get:()=>curved,       set:v=>{ curved=v; slots.forEach(s=>s.updateSize()); }},
+  focus:      {el:'focusOn',    label:'Focus zoom',                  hint:'The screen you look at comes closer',
+               get:()=>focusOn,      set:v=>{ focusOn=v; }},
+  linkSize:   {el:'linkSize',   label:'Same size for all screens',   hint:'Resizing one resizes them all',
+               get:()=>linkSize,     set:v=>{ linkSize=v; if(v) sizeTo(slots[selected],slots[selected].scale); }},
+  headCursor: {el:'headCursor', label:'Head cursor',                 hint:'Look at a button and press A',
+               get:()=>headCursor,   set:v=>{ headCursor=v; }},
+  autoHide:   {el:'autoHide',   label:'Hide control bars',           hint:'Until you look at a screen\'s bar',
+               get:()=>autoHide,     set:v=>{ autoHide=v; }},
+  cropBtn:    {el:'cropBtn',    label:'CROP button on screen bars',  hint:'Cut away empty borders',
+               get:()=>showCropBtn,  set:v=>{ showCropBtn=v; layoutBarButtons(); slots.forEach(s=>s.barDirty=true); }},
+  autoCrop:   {el:'autoCropAll',label:'Auto-crop every video',       hint:'And every photo, as it loads',
+               get:()=>autoCropAll,  set:v=>{ autoCropAll=v; if(v) visible().forEach(s=>{ if(s.loaded && !s.isCropped()) s.autoCrop(true); }); }},
+};
+function setSetting(k,v){
+  SETTINGS[k].set(v);
+  const e=document.getElementById(SETTINGS[k].el); if(e) e.checked=v;
+  lib.dirty=true;
+}
+for(const k in SETTINGS){
+  const e=document.getElementById(SETTINGS[k].el);
+  if(e){ e.checked=SETTINGS[k].get(); e.onchange=()=>setSetting(k,e.checked); }
+}
+
 renderer.setAnimationLoop(()=>{
   const now=performance.now();
   const hovered=new Map(); // slot -> hit
@@ -1546,7 +1588,6 @@ renderer.setAnimationLoop(()=>{
   if(needArrange) arrange();
   updateGaze();
   updateFocus(now);
-  if(pxOn) measurePx();
   pollPad(now);
 
   if(renderer.xr.isPresenting){
