@@ -120,11 +120,11 @@ button:disabled{opacity:.5;cursor:not-allowed}
     <button id="pauseAll">Pause all</button>
     <button id="restartAll">Restart all together</button>
     <button id="muteAll">Mute all</button>
-    <button id="fitView" title="Shrink every screen together so they all fit within 90°">Fit all in view</button>
+    <button id="fitView" title="Resize every screen together to fit 90° across, with nothing more than 20° above your eyes">Fit all in view</button>
     <label><input type="checkbox" id="curveOn" checked> Curved screens</label>
     <label><input type="checkbox" id="focusOn"> Focus zoom (the screen you look at comes closer)</label>
     <label><input type="checkbox" id="linkSize"> Same size for all screens</label>
-    <label><input type="checkbox" id="autoHide" checked> Hide control bars in VR until you look at a screen</label>
+    <label><input type="checkbox" id="autoHide" checked> Hide control bars in VR (they appear over the bottom of the picture when you look there)</label>
     <label><input type="checkbox" id="headCursor" checked> Head cursor (look at something, press A to click it)</label>
     <label><input type="checkbox" id="cropBtn"> CROP button on screen bars</label>
     <label><input type="checkbox" id="autoCropAll"> Auto-crop borders on every video and photo</label>
@@ -168,7 +168,7 @@ button:disabled{opacity:.5;cursor:not-allowed}
     <p>In the media browser: A opens the folder or plays the video under the head cursor, B goes back up a folder (or closes the browser), LB / RB or the D-pad turn pages. Each screen remembers where it was in the browser. ⚙ Settings (top left of the browser) has the layout, curved screens, focus zoom, fit all in view, and the other options on this page, so you can change them without taking the headset off. Use "Load to screen" on the left to pick which screen the video goes to, and "Format" for 3D videos (SBS = side by side, OU = over/under, ½ = half-width).</p>
     <p>Picking a video makes the rest of its folder that screen's playlist. "When a video ends" (in the browser, or on the screen's card) chooses whether it stops, plays the next video in the folder, or plays the folder in random order. PLAY ALL and SHUFFLE at the top of the browser start the whole folder, and NEXT on a screen's control bar skips ahead.</p>
     <p>Each screen's control bar has two rows: FILES, PREV −10 ▶ +10 NEXT, MUTE V− V+ SOLO, S− S+ LOOP SWAP on top, and the seek bar, time and file name underneath.</p>
-    <p>Focus zoom (a setting): the screen you look at slides toward you so it's bigger and sharper, and stays that way while you use its control bar. Fit all in view shrinks every screen together so they all fit within 90° in front of you. Curved screens (on by default) wrap each screen around you so its edges don't stretch.</p>
+    <p>Focus zoom (a setting): the screen you look at slides toward you so it's bigger and sharper, and stays that way while you use its control bar. Fit all in view resizes every screen together so they fit within 90° across, with nothing more than 20° above your eyes (looking up is the tiring direction). Curved screens (on by default) wrap each screen around you so its edges don't stretch.</p>
     <p>Cropping empty borders: turn on "CROP button on screen bars" and press CROP while the video plays. It looks for plain borders that stay still while the picture moves, of any colour. Press it again to undo. Right stick left / right, or the sliders on a screen's card, crop by hand. "Auto-crop every video" does this whenever something new loads. In the 3 wide and 4 wide layouts a cropped picture grows to fill the height.</p>
     <p>To rearrange screens, press SWAP on one screen's control bar (its frame blinks), then look at another screen and press A, or press that screen's SWAP button, which now reads HERE. The two trade places and keep playing. Press SWAP again to cancel; it also cancels itself after 15 seconds. On the PC, use "Swap places with…" on a screen's card.</p>
     <p>Photos: folders list your photos (JPG, PNG, WebP, GIF, AVIF, and JPS 3D photos) alongside videos. Pick one and that screen plays a slideshow of the folder's photos. Play/pause starts and stops it; "Each photo shows for" on the page, or T− / T+ on the screen's control bar (D-pad up/down on the controller), sets how long each photo stays. −10 / +10 and LB / RB go to the previous or next photo, and the seek bar jumps through the folder. The screen keeps its 3D format (SBS, OU, L⇄R) from photo to photo. JPS files switch to SBS with the eyes swapped automatically, since that's how they're stored. When a slideshow reaches the last photo it stops, unless LOOP is on; SHUFFLE plays the photos in random order.</p>
@@ -339,7 +339,7 @@ class Slot{
     this.barCanvas=document.createElement('canvas'); this.barCanvas.width=BW; this.barCanvas.height=BH;
     this.barTex=new THREE.CanvasTexture(this.barCanvas);
     this.barMat=new THREE.MeshBasicMaterial({map:this.barTex,transparent:true,opacity:1,depthWrite:false});
-    this.bar=new THREE.Mesh(new THREE.PlaneGeometry(1,BH/BW), this.barMat);
+    this.bar=new THREE.Mesh(new THREE.PlaneGeometry(1,BH/BW,SCREEN_SEG,1), this.barMat); // columns so it can curve with the screen
     this.bar.userData={slot:this,kind:'bar'}; this.bar.position.z=0.01;
 
     this.frame=new THREE.Mesh(new THREE.PlaneGeometry(1,1,SCREEN_SEG,1), new THREE.MeshBasicMaterial({color:new THREE.Color(this.color)}));
@@ -398,10 +398,12 @@ class Slot{
     const w=Math.min(bw0,bh0*a), h=w/a;
     for(const m of [this.mono,this.left,this.right]){ m.scale.set(w,h,1); bendScreen(m,w,curved); }
     this.frame.scale.set(w+0.07,h+0.07,1); bendScreen(this.frame,w+0.07,curved);
-    const bw=Math.max(w,1.2); this.bar.scale.set(bw,bw,1);
-    this.bar.position.y = -h/2 - 0.03 - bw*(BH/BW)/2;
+    const bw=Math.max(w,1.2), bh=bw*(BH/BW); this.bar.scale.set(bw,bw,1); bendScreen(this.bar,bw,curved);
+    // When bars auto-hide they sit over the bottom of the picture (like a TV's on-screen controls) and
+    // take no room in the layout; otherwise they hang below the screen.
+    this.bar.position.y = autoHide? -h/2+bh/2 : -h/2-0.03-bh/2;
     // w: widest part (screen or bar); sw: the framed screen; bw: the bar (always flat); vw: the picture alone
-    this.dims={w:Math.max(w+0.07,bw), sw:w+0.07, bw, vw:w, h:h+0.07, bar:0.03+bw*(BH/BW)};
+    this.dims={w:Math.max(w+0.07,bw), sw:w+0.07, bw, vw:w, h:h+0.07, bar:autoHide? 0 : 0.03+bh};
     needArrange=true;
   }
   place(on,baseW,baseH){
@@ -740,7 +742,7 @@ function layoutSpan(k){
     ss.forEach((s,i)=>{
       const vw=s.dims.vw*k, bw=Math.max(vw,1.2);
       a+=screenAngle({w:Math.max(vw+0.07,bw), sw:vw+0.07, bw}) + (i? H_GAP/R : 0);
-      rh=Math.max(rh,(s.dims.h-0.07)*k+0.07); rb=Math.max(rb,0.03+bw*(BH/BW));
+      rh=Math.max(rh,(s.dims.h-0.07)*k+0.07); rb=Math.max(rb,autoHide? 0 : 0.03+bw*(BH/BW));
     });
     hMax=Math.max(hMax,a); vTot+=rh+rb;
   }
@@ -749,14 +751,21 @@ function layoutSpan(k){
 }
 // Scale every visible screen together so the whole layout fits inside deg° across (and 0.8 of that
 // vertically, since headsets see less up-down than side to side). Relative sizes are kept.
+// Fit to the space you can comfortably watch: at most deg° across, and nothing higher than FIT_UP_DEG
+// above your eyes (looking up is the tiring direction; looking down is limited by the floor, which the
+// layout already respects by lifting screens). Each try really lays the screens out and measures the
+// result, so the floor's push upward is included.
+const FIT_UP_DEG=20;
+function topAngle(list){ let m=-90; for(const s of list) m=Math.max(m, Math.atan2(s.group.position.y+s.dims.h/2-eyeY, R)*180/Math.PI); return m; }
 function fitInView(deg){
-  const fits=k=>{ const s=layoutSpan(k); return s.h<=deg && s.v<=deg*0.8; };
+  const vis=visible(); if(!vis.length) return;
+  const base=vis.map(s=>s.scale);
+  const tryK=k=>{ vis.forEach((s,i)=>{ s.scale=Math.max(0.2,Math.min(2.5,base[i]*k)); s.updateSize(); }); arrange();
+    return layoutSpan(1).h<=deg && topAngle(vis)<=FIT_UP_DEG; };
   let lo=0.05, hi=10;
-  for(let i=0;i<40;i++){ const mid=(lo+hi)/2; if(fits(mid)) lo=mid; else hi=mid; }
-  visible().forEach(s=>s.setScale(s.scale*lo));
-  const sp=layoutSpan(1);
-  setStatus(`Fitted: the screens now cover ${sp.h.toFixed(0)}° across and ${sp.v.toFixed(0)}° up and down.`+
-    '');
+  for(let i=0;i<30;i++){ const mid=(lo+hi)/2; if(tryK(mid)) lo=mid; else hi=mid; }
+  vis.forEach((s,i)=>s.setScale(base[i]*lo)); arrange();
+  setStatus(`Fitted: the screens cover ${layoutSpan(1).h.toFixed(0)}° across, and their top edge is ${topAngle(vis).toFixed(0)}° above your eyes.`);
 }
 // Video textures: with mipmaps, a big video on a small screen is averaged down smoothly instead of
 // skipping pixels, which is what makes small screens shimmer and crawl.
@@ -925,6 +934,7 @@ function raycastFrom(rc){ rc.layers.enable(1); const h=rc.intersectObjects(targe
   return {slot,kind,dist:h.distance};
 }
 function activate(hit){
+  if(hit.kind==='bar' && hit.slot.barMat.opacity<0.6){ hit.slot.toggle(); return; } // bar not showing yet: it's the picture
   // second half of a swap: pick the other screen by clicking it or its HERE button
   if(swapFrom && hit.slot && hit.slot!==swapFrom && (hit.kind==='screen' || (hit.btn && hit.btn.id==='swap'))){ swapScreens(swapFrom,hit.slot); return; }
   if(hit.kind==='panel'){ if(hit.btn) browserClick(hit.btn); }
@@ -1382,7 +1392,7 @@ function drawSettings(c,btn,acc){
       const w=t.length>1? 118 : 70; btn('layout',t,bx,y+18,w,68,{data:l,on:layout===l}); return bx+w+10; }, x+CW-28-(70*2+118*3+40)); }
   toggle(0,1,'curved');
   toggle(0,2,'focus');
-  { const {x,y}=row(0,3,'Fit all in view','Shrink every screen to fit within 90°'); btn('fit','FIT',x+CW-178,y+20,150,64); }
+  { const {x,y}=row(0,3,'Fit all in view','90° across, nothing over 20° above your eyes'); btn('fit','FIT',x+CW-178,y+20,150,64); }
   toggle(0,4,'linkSize');
   // CONTROLS
   toggle(1,0,'headCursor');
@@ -1422,9 +1432,10 @@ function updateGaze(){
   reticle.quaternion.setFromRotationMatrix(tmpM.extractRotation(camera.matrixWorld));
   reticle.scale.setScalar(d*(live? 1.35 : 1));
   retMat.color.set(live? (lib.open? SLOT_COLORS_DARK[lib.target] : gazeHit.slot? gazeHit.slot.color : '#ffffff') : '#c9cce0');
-  const key=gazeHit? gazeHit.kind+':'+(gazeHit.slot? gazeHit.slot.i : '') : 'none', now=performance.now();
+  const gk=gazeHit && gazeHit.kind==='bar' && gazeHit.slot.barMat.opacity<0.6? 'screen' : gazeHit && gazeHit.kind; // hidden bar = picture
+  const key=gazeHit? gk+':'+(gazeHit.slot? gazeHit.slot.i : '') : 'none', now=performance.now();
   if(key!==gazeKey){ gazeKey=key; gazeSince=now; }
-  const hide=!!(gazeHit && gazeHit.kind==='screen' && now-gazeSince>CURSOR_HIDE_MS);
+  const hide=!!(gazeHit && gk==='screen' && now-gazeSince>CURSOR_HIDE_MS);
   retAlpha+=((hide? 0 : 1)-retAlpha)*(hide? 0.08 : 0.35); // fade out gently, come back quickly
   retMat.opacity=retAlpha; retOuter.material.opacity=0.55*retAlpha;
   reticle.visible=retAlpha>0.02; // A still clicks while it's hidden
@@ -1567,8 +1578,8 @@ const SETTINGS = {
                get:()=>linkSize,     set:v=>{ linkSize=v; if(v) sizeTo(slots[selected],slots[selected].scale); }},
   headCursor: {el:'headCursor', label:'Head cursor',                 hint:'Look at a button and press A',
                get:()=>headCursor,   set:v=>{ headCursor=v; }},
-  autoHide:   {el:'autoHide',   label:'Hide control bars',           hint:'Until you look at a screen\'s bar',
-               get:()=>autoHide,     set:v=>{ autoHide=v; }},
+  autoHide:   {el:'autoHide',   label:'Hide control bars',           hint:'They appear over the picture when you look at its bottom',
+               get:()=>autoHide,     set:v=>{ autoHide=v; slots.forEach(s=>s.updateSize()); }},
   cropBtn:    {el:'cropBtn',    label:'CROP button on screen bars',  hint:'Cut away empty borders',
                get:()=>showCropBtn,  set:v=>{ showCropBtn=v; layoutBarButtons(); slots.forEach(s=>s.barDirty=true); }},
   autoCrop:   {el:'autoCropAll',label:'Auto-crop every video',       hint:'And every photo, as it loads',
