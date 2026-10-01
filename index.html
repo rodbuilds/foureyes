@@ -852,14 +852,18 @@ function arrange(){
   let top = rows.length===1? cy+rowH[0]/2 : cy+total/2;
   top += Math.max(0, MIN_BOTTOM-(top-total));
   rows.forEach((r,ri)=>{
-    const y=top-rowH[ri]/2;
+    const rowY=top-rowH[ri]/2;
     const ang=r.map(s=>screenAngle(s.dims)), gap=H_GAP/R;
     let a=(ang.reduce((x,v)=>x+v,0)+gap*(r.length-1))/2; // leftmost edge (positive yaw is to your left)
     r.forEach((s,k)=>{
       const c=a-ang[k]/2;
+      // In a single row each screen centres on your eyes by itself, and only a screen that would reach
+      // the floor rises, and only as far as it must. (Lifting the whole row for one big tall screen
+      // left the short screens beside it above eye level.) Grid rows still stack together.
+      const y= rows.length===1? Math.max(cy, MIN_BOTTOM+s.dims.bar+s.dims.h/2) : rowY;
       s.basePos.set(-R*Math.sin(c), y, -R*Math.cos(c));
       s.group.position.copy(s.basePos); s.zoom=1;
-      s.group.lookAt(0,y,0);
+      s.group.lookAt(0,eyeY,0); // tilted to face your eyes when it sits above or below them
       a-=ang[k]+gap;
     });
     top-=rowH[ri]+rowB[ri]+V_GAP;
