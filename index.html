@@ -151,7 +151,7 @@ button:disabled{opacity:.5;cursor:not-allowed}
     <dl class="pad">
       <dt>A</dt><dd>Click whatever the head cursor is on (a button, a video in the media browser, or a screen to play or pause it). When the cursor is on nothing, plays or pauses the selected screen.</dd>
       <dt>View button</dt><dd>Open or close the media browser for the selected screen</dd>
-      <dt>D-pad left / right</dt><dd>Select the previous or next screen</dd>
+      <dt>D-pad left / right</dt><dd>Previous or next video (or photo) in the selected screen's playlist. Look at a screen to select it.</dd>
       <dt>LB / RB</dt><dd>Skip back or forward 10 seconds (hold to keep skipping)</dd>
       <dt>LT / RT</dt><dd>Skip back or forward 1 minute</dd>
       <dt>Left stick left / right</dt><dd>Scrub back or forward 5 seconds at a time</dd>
@@ -428,28 +428,34 @@ class Slot{
     const c=this.crop; this.setCrop({...c, l:c.l+d, r:c.r+d});
     this.flashMsg(this.isCropped()? 'Crop sides '+Math.round((this.crop.l+this.crop.r)*50)+'%' : 'Crop off');
   }
-  // Find plain black or white borders and cut them. While a video plays it looks at three frames 0.7 s
-  // apart and keeps the smallest crop, so one dark frame can't eat into the picture. quiet: called
-  // automatically, so say nothing when there's nothing to crop.
+  // Find empty borders and cut them. While a video plays it takes six samples 0.35 s apart and uses
+  // movement: a border is plain (any colour, a little noise is fine) AND doesn't change while the
+  // picture beside it does. Plain alone could be a dark scene; still alone could be the room behind a
+  // dancer on a fixed camera, so it takes both. Paused videos and photos only have one frame, so
+  // there it falls back to plain and near-black or near-white. quiet: called automatically, so say
+  // nothing when there's nothing to crop.
   async autoCrop(quiet){
     if(!this.loaded) return false;
     const tok=this.cropTry;
     const eye= this.mode.startsWith('sbs')? [0,0,.5,1] : this.mode.startsWith('tb')? [0,0,1,.5] : [0,0,1,1];
-    const v=this.video, n= !this.photo && !v.paused? 3 : 1;
-    let best=null, seen=0;
-    for(let i=0;i<n;i++){
-      if(i) await new Promise(r=>setTimeout(r,700));
-      if(tok!==this.cropTry) return false; // the media changed meanwhile
-      let res=null;
-      try{
-        if(this.photo){ if(this.cur) res=detectBorders(this.cur.bmp,this.cur.bmp.width,this.cur.bmp.height,eye); }
-        else if(v.readyState>=2) res=detectBorders(v,v.videoWidth,v.videoHeight,eye);
-      }catch(e){ if(!quiet) this.flashMsg('Can\'t read this video\'s pixels'); return false; }
-      if(!res) continue; seen++;
-      best= best? {l:Math.min(best.l,res.l), r:Math.min(best.r,res.r), t:Math.min(best.t,res.t), b:Math.min(best.b,res.b)} : res;
+    const v=this.video, playing=!this.photo && !v.paused;
+    if(!quiet) this.flashMsg(playing? 'Looking for borders…' : 'Looking for borders (works best while playing)…');
+    const S=[];
+    try{
+      for(let i=0;i<(playing? 6 : 1);i++){
+        if(i) await new Promise(r=>setTimeout(r,350));
+        if(tok!==this.cropTry) return false; // the media changed meanwhile
+        if(this.photo){ if(this.cur) S.push(sampleLum(this.cur.bmp,this.cur.bmp.width,this.cur.bmp.height,eye)); }
+        else if(v.readyState>=2) S.push(sampleLum(v,v.videoWidth,v.videoHeight,eye));
+      }
+    }catch(e){ if(!quiet) this.flashMsg('Can\'t read this video\'s pixels'); return false; }
+    if(!S.length) return null;
+    const best=findBorders(S);
+    if(!best) return null; // the picture looked blank (a fade, a title card): try again later
+    if(best.l+best.r+best.t+best.b<0.001){
+      if(!quiet) this.flashMsg(playing? 'No borders found. Right stick ←/→ crops by hand' : 'No borders found. Try while it plays, or right stick ←/→');
+      return false;
     }
-    if(!seen) return null; // every frame looked blank (a fade, a title card): try again later
-    if(best.l+best.r+best.t+best.b<0.001){ if(!quiet) this.flashMsg('No borders found. Right stick ←/→ crops by hand'); return false; }
     this.setCrop(best); this.flashMsg('Cropped the borders'); return true;
   }
   // for auto-crop on load: first look 1.5 s in, then again at 6 s and 15 s if the picture was still blank
@@ -789,6 +795,10 @@ function updateFocus(now){
       if(a<half*1.05 && a<bestA){ bestA=a; best=s; }
     }
   }
+  // Looking at (or pointing at) a screen's control bar keeps that screen in focus: the bar sits below
+  // the picture, outside the angle checked above, and zooming out under your gaze made it hard to use.
+  if(focusOn && gazeHit && gazeHit.kind==='bar' && gazeHit.slot) best=gazeHit.slot;
+  else if(focusOn && focusSlot && now-(focusSlot.lastBarLook||0)<600) best=focusSlot;
   if(best!==focusCand){ focusCand=best; focusSince=now; }
   if(now-focusSince>350) focusSlot=focusCand; // a short dwell, so glancing across doesn't pop every screen
   for(const s of visible()){
@@ -817,23 +827,40 @@ function measurePx(){
 }
 // ---- crop ----
 document.getElementById('autoCropAll').onchange=e=>{ autoCropAll=e.target.checked; if(autoCropAll) visible().forEach(s=>{ if(s.loaded && !s.isCropped()) s.autoCrop(true); }); };
-// Find plain borders in one frame: shrink it to 160x90, then walk in from each edge while the whole
-// column (or row) is a flat near-black or near-white. eye = the part of the frame to look at, as
-// [x0,y0,x1,y1] fractions with the origin at the top left. Returns null for a frame that's all border.
-const cropCanvas=document.createElement('canvas'); cropCanvas.width=160; cropCanvas.height=90;
+// Border detection works on small greyscale samples of one eye's part of the frame.
+// eye = [x0,y0,x1,y1] as fractions with the origin at the top left.
+const CW=160, CH=90;
+const cropCanvas=document.createElement('canvas'); cropCanvas.width=CW; cropCanvas.height=CH;
 const cropCtx=cropCanvas.getContext('2d',{willReadFrequently:true});
-function detectBorders(src,sw,sh,eye){
-  const W=160, H=90;
-  cropCtx.drawImage(src, eye[0]*sw, eye[1]*sh, (eye[2]-eye[0])*sw, (eye[3]-eye[1])*sh, 0,0,W,H);
-  const d=cropCtx.getImageData(0,0,W,H).data; // throws for cross-origin video without CORS
-  const lum=(x,y)=>{ const i=(y*W+x)*4; return 0.299*d[i]+0.587*d[i+1]+0.114*d[i+2]; };
-  const flat=(len,get)=>{ let s=0,s2=0; for(let k=0;k<len;k++){ const v=get(k); s+=v; s2+=v*v; }
-    const m=s/len, sd=Math.sqrt(Math.max(0,s2/len-m*m)); return (m<30 || m>225) && sd<9; };
-  const col=x=>flat(H,y=>lum(x,y)), row=y=>flat(W,x=>lum(x,y));
-  let l=0; while(l<W*0.45 && col(l)) l++;
-  let r=0; while(r<W*0.45 && col(W-1-r)) r++;
-  let t=0; while(t<H*0.45 && row(t)) t++;
-  let b=0; while(b<H*0.45 && row(H-1-b)) b++;
+function sampleLum(src,sw,sh,eye){
+  cropCtx.drawImage(src, eye[0]*sw, eye[1]*sh, (eye[2]-eye[0])*sw, (eye[3]-eye[1])*sh, 0,0,CW,CH);
+  const d=cropCtx.getImageData(0,0,CW,CH).data, L=new Float32Array(CW*CH); // throws for cross-origin video without CORS
+  for(let i=0;i<CW*CH;i++) L[i]=0.299*d[i*4]+0.587*d[i*4+1]+0.114*d[i*4+2];
+  return L;
+}
+// S: luminance samples, oldest first. Walks in from each edge while the whole column (or row) is a
+// border, and returns the crop as fractions, or null if the picture looked blank.
+function findBorders(S){
+  const W=CW, H=CH, n=S.length;
+  const colAt=x=>y=>y*W+x, rowAt=y=>x=>y*W+x;
+  const stats=(f,len,at)=>{ let a=0,a2=0; for(let k=0;k<len;k++){ const v=f[at(k)]; a+=v; a2+=v*v; } const m=a/len; return {m, sd:Math.sqrt(Math.max(0,a2/len-m*m))}; };
+  // average change between consecutive samples along one column/row
+  const motion=(len,at)=>{ let t=0; for(let k=1;k<n;k++) for(let j=0;j<len;j++){ const i=at(j); t+=Math.abs(S[k][i]-S[k-1][i]); } return t/(len*(n-1)); };
+  // movement in the middle of the picture tells whether movement can be trusted at all (a still shot can't)
+  let mid=0, cols=0; if(n>=3) for(let x=Math.floor(W*0.4);x<Math.ceil(W*0.6);x++){ mid+=motion(H,colAt(x)); cols++; }
+  mid= cols? mid/cols : 0;
+  const useMotion= n>=3 && mid>1.5, still=Math.min(3, Math.max(0.8, mid*0.2)); // still in absolute terms too: compression noise is ~1-2
+  const isBorder=(len,at)=>{
+    for(const f of S){ const st=stats(f,len,at);
+      if(st.sd>12) return false;                               // has detail: picture
+      if(!useMotion && st.m>=40 && st.m<=215) return false;     // one frame only: trust just near-black / near-white
+    }
+    return !useMotion || motion(len,at)<still;                  // and it must hold still while the picture moves
+  };
+  let l=0; while(l<W*0.45 && isBorder(H,colAt(l))) l++;
+  let r=0; while(r<W*0.45 && isBorder(H,colAt(W-1-r))) r++;
+  let t=0; while(t<H*0.45 && isBorder(W,rowAt(t))) t++;
+  let b=0; while(b<H*0.45 && isBorder(W,rowAt(H-1-b))) b++;
   if(l+r>W*0.85 || t+b>H*0.85) return null;
   // ignore slivers; otherwise cut half a sample further in, so a soft edge line doesn't show
   const fr=(px,len)=> px<len*0.02? 0 : Math.min(0.45,(px+0.5)/len);
@@ -1138,18 +1165,20 @@ function queueThumbs(){
 const pageCount=()=>Math.max(1,Math.ceil(lib.entries.length/PER_PAGE));
 const pageEntries=()=>lib.entries.slice(lib.page*PER_PAGE,(lib.page+1)*PER_PAGE);
 
+// back on the page this screen was on when it last used the browser
+function restorePage(){ if(lib.restorePage){ lib.page=Math.min(lib.restorePage,pageCount()-1); lib.restorePage=0; } }
 async function refreshDir(){
   const gen=++lib.gen; lib.page=0; lib.note=''; clearThumbQ();
   if(!lib.path.length){
     lib.entries=lib.roots.map(r=>({name:r.name,kind:'dir',root:r,key:'root:'+r.id}));
     lib.msg=lib.roots.length? '' : 'No video folders yet.\nTake off the headset, click "Add video folder…" on the page\nand choose the folder your videos are in. You only do this once.';
-    lib.dirty=true; return;
+    restorePage(); lib.dirty=true; return;
   }
   lib.entries=[]; lib.msg='Reading folder…'; lib.dirty=true;
   try{
     let e=await listDir(lib.path[lib.path.length-1]); if(gen!==lib.gen) return;
     if(lib.sort==='latest' && e.length){ lib.msg='Sorting by date…'; lib.dirty=true; e=await sortEntries(e); if(gen!==lib.gen) return; }
-    lib.entries=e; lib.msg=e.length? '' : 'No videos or folders in here.';
+    lib.entries=e; lib.msg=e.length? '' : 'No videos or folders in here.'; restorePage();
   }catch(err){
     if(gen!==lib.gen) return;
     lib.msg=err.name==='NotAllowedError'? 'Access to this folder needs to be confirmed again.\nClick Reconnect next to it on the page.' : 'Couldn\'t read this folder.\n'+(err.message||err);
@@ -1218,6 +1247,12 @@ panel.userData={kind:'panel'}; panel.visible=false; scene.add(panel);
 
 function openBrowser(i){
   const t=slots[i].group.visible? i : (visible()[0]||slots[0]).i;
+  // Each screen has its own place in the browser: leave the last screen's folder with it, and pick up
+  // this screen's where it left off (the top level, the first time).
+  if(lib.owner!==t){
+    if(lib.owner!=null){ const o=slots[lib.owner]; o.bpath=lib.path.slice(); o.bpage=lib.page; }
+    lib.owner=t; lib.path=(slots[t].bpath||[]).slice(); lib.restorePage=slots[t].bpage||0; lib.entries=[];
+  }
   setTarget(t);
   camera.updateMatrixWorld();
   const head=new THREE.Vector3().setFromMatrixPosition(camera.matrixWorld);
@@ -1463,8 +1498,9 @@ function pollPad(now){
     if(hold(5,400,250)||hold(15,400,250)||hold(13,400,250)) turnPage(1);
     padPrev=cur; return;
   }
-  if(down(14)) act(()=>cycle(-1));
-  if(down(15)) act(()=>cycle(1));
+  // D-pad left/right: previous / next video (or photo, or scene). Screens are picked by looking at them.
+  if(down(14)) act(()=>slots[selected].next(-1));
+  if(down(15)) act(()=>slots[selected].next(1));
   const s=slots[selected];
   if(down(0)) act(()=>{ if(!g) s.toggle(); else if(g.btn || g.kind==='screen') activate(g); });
   if(down(1)) act(()=>s.action('mute'));
@@ -1540,6 +1576,7 @@ renderer.setAnimationLoop(()=>{
     const nb = h&&h.kind==='bar'&&h.btn? (h.btn.id==='seek'? null : h.btn.id) : null;
     const ns = h&&h.kind==='bar'&&h.btn&&h.btn.id==='seek'? h.btn.frac : null;
     if(nb!==s.hoverBtn || ns!==s.hoverSeek){ s.hoverBtn=nb; s.hoverSeek=ns; s.barDirty=true; }
+    if(h && h.kind==='bar') s.lastBarLook=now; // focus zoom holds while you use the bar
     if(h && !(h.gaze && h.kind==='screen')) s.lastHover=now; // just looking at a screen shouldn't pop its bar up
     if(s.barDirty || (!s.isPaused() && now-s.lastDraw>250) || (s.flashUntil && now>s.flashUntil)) s.drawBar();
     if(swapFrom) s.frame.visible = s===swapFrom? now%700<450 : padActive && s.i===selected;
