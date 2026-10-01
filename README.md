@@ -10,13 +10,20 @@ nothing to install and no account, and your files never leave your computer.
 ## Features
 
 - **Up to four screens.** Layouts for 1 screen, 2 side by side, 3 or 4 in a wide arc, or a
-  2×2 grid. The arcs give tall videos full height, and screens space themselves so they never
-  overlap, whatever their size or shape.
+  2×2 grid. Screens curve around you, the arcs give tall videos full height, and screens space
+  themselves so they never overlap, whatever their size or shape.
+- **Focus zoom and fit all in view.** Optionally, the screen you look at slides toward you for
+  a bigger, sharper picture while the others stay in view. One button shrinks everything to fit
+  within 90°.
+- **Crop empty borders.** Cut away black, white or plain bars at the sides of a video, by hand
+  or automatically (it looks for edges that stay still while the picture moves), so the picture
+  itself can be bigger.
 - **Independent controls per screen.** Play, pause, seek, skip, volume, mute, solo (hear one
   screen only), loop, playback speed and size, from a control bar under each screen.
 - **Media browser in VR.** Browse your video and photo folders from inside the headset, with
   thumbnails, on a curved panel. Sort each folder A–Z or newest first, then pick which screen
-  a video goes to.
+  a video goes to. Each screen remembers where it was. A Settings page in the browser has the
+  layout and options, so you never need to take the headset off.
 - **Playlists.** Picking a video makes the rest of its folder that screen's playlist. When a
   video ends, a screen can stop, play the next one, or shuffle the folder. PLAY ALL and
   SHUFFLE start a whole folder.
@@ -67,12 +74,13 @@ One screen is selected at a time, shown by a coloured frame. Looking at a screen
 | **A** | Click whatever the head cursor is on. When it's on nothing, play/pause the selected screen |
 | **View** | Open or close the media browser |
 | **Menu** | Play or pause all screens |
-| **D-pad left / right** | Select the previous or next screen |
+| **D-pad left / right** | Previous / next video (or photo) in the selected screen's playlist |
 | **D-pad up / down** | Volume (on a photo screen: time per photo) |
 | **LB / RB** | Back / forward 10 seconds (photos: previous / next), hold to repeat |
 | **LT / RT** | Back / forward 1 minute |
 | **Left stick left / right** | Scrub 5 seconds at a time |
 | **Right stick up / down** | Make the screen bigger or smaller |
+| **Right stick left / right** | Crop the sides of the picture in or out |
 | **B** | Mute |
 | **X** | Solo this screen's sound |
 | **Y** | Loop |
@@ -80,7 +88,9 @@ One screen is selected at a time, shown by a coloured frame. Looking at a screen
 | **Right stick click** | Show or hide the head cursor |
 
 In the media browser: **A** opens a folder or plays what's under the cursor, **B** goes up a
-folder (or closes the browser), and **LB / RB** or the **D-pad** turn pages.
+folder (or closes the browser), and **LB / RB** or the **D-pad** turn pages. **⚙ Settings** at
+the top left holds the layout, curved screens, focus zoom, fit all in view, head cursor, crop
+options and photo time.
 
 ### Touch / motion controllers
 
@@ -89,14 +99,20 @@ While pointing at a screen, the thumbstick skips (left/right) and changes volume
 
 ### Control bar
 
-Each screen has a bar underneath it:
-**FILES · −10 · ▶ · +10 · NEXT · seek bar · MUTE · V− V+ · SOLO · S− S+ · LOOP · SWAP**
+Each screen has a two-row bar underneath it:
+
+- **Top:** FILES · PREV −10 ▶ +10 NEXT · MUTE V− V+ SOLO · S− S+ (CROP) LOOP SWAP
+- **Bottom:** seek bar · time (or photo count) · file name
+
 
 - **SWAP:** press it on one screen (its frame blinks), then look at another screen and press
   **A**, or press that screen's button, which now reads **HERE**. The two trade places and
   keep playing.
 - **Photos:** on a screen showing photos, V−/V+ become **T−/T+** (time per photo), and −10/+10
   go to the previous/next photo.
+- **CROP** (turn on "CROP button on screen bars" in settings): press it while the video plays
+  to cut away empty borders; press again to undo. The head cursor fades while you watch a
+  screen and comes back when you look elsewhere.
 
 ## Supported files
 

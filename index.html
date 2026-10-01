@@ -120,10 +120,16 @@ button:disabled{opacity:.5;cursor:not-allowed}
     <button id="pauseAll">Pause all</button>
     <button id="restartAll">Restart all together</button>
     <button id="muteAll">Mute all</button>
-    <label><input type="checkbox" id="autoHide" checked> Hide control bars in VR until you point at a screen</label>
+    <button id="fitView" title="Resize every screen together to fit 90° across, with nothing more than 20° above your eyes">Fit all in view</button>
+    <label><input type="checkbox" id="curveOn" checked> Curved screens</label>
+    <label><input type="checkbox" id="focusOn"> Focus zoom (the screen you look at comes closer)</label>
     <label><input type="checkbox" id="linkSize"> Same size for all screens</label>
-    <label>Each photo shows for <select id="photoSecs" aria-label="Seconds per photo in slideshows"></select></label>
+    <label><input type="checkbox" id="autoHide" checked> Hide control bars in VR until you look at a screen</label>
     <label><input type="checkbox" id="headCursor" checked> Head cursor (look at something, press A to click it)</label>
+    <label><input type="checkbox" id="cropBtn"> CROP button on screen bars</label>
+    <label><input type="checkbox" id="autoCropAll"> Auto-crop borders on every video and photo</label>
+    <label>Each photo shows for <select id="photoSecs" aria-label="Seconds per photo in slideshows"></select></label>
+    <label>VR render <select id="xrScale" aria-label="VR render resolution" title="Sharper, but harder on the graphics card. Takes effect the next time you press Enter VR."><option value="1">normal</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option></select></label>
   </div>
 
   <section class="lib">
@@ -145,7 +151,7 @@ button:disabled{opacity:.5;cursor:not-allowed}
     <dl class="pad">
       <dt>A</dt><dd>Click whatever the head cursor is on (a button, a video in the media browser, or a screen to play or pause it). When the cursor is on nothing, plays or pauses the selected screen.</dd>
       <dt>View button</dt><dd>Open or close the media browser for the selected screen</dd>
-      <dt>D-pad left / right</dt><dd>Select the previous or next screen</dd>
+      <dt>D-pad left / right</dt><dd>Previous or next video (or photo) in the selected screen's playlist. Look at a screen to select it.</dd>
       <dt>LB / RB</dt><dd>Skip back or forward 10 seconds (hold to keep skipping)</dd>
       <dt>LT / RT</dt><dd>Skip back or forward 1 minute</dd>
       <dt>Left stick left / right</dt><dd>Scrub back or forward 5 seconds at a time</dd>
@@ -154,12 +160,16 @@ button:disabled{opacity:.5;cursor:not-allowed}
       <dt>X</dt><dd>Solo this screen's sound (mutes the others)</dd>
       <dt>Y</dt><dd>Loop on or off</dd>
       <dt>Right stick up / down</dt><dd>Make the screen bigger or smaller</dd>
+      <dt>Right stick left / right</dt><dd>Crop the sides of the picture in or out (for empty borders)</dd>
       <dt>Menu button</dt><dd>Play or pause all screens</dd>
       <dt>Left stick click</dt><dd>Keep control bars always visible, or let them fade</dd>
       <dt>Right stick click</dt><dd>Show or hide the head cursor</dd>
     </dl>
-    <p>In the media browser: A opens the folder or plays the video under the head cursor, B goes back up a folder (or closes the browser), LB / RB or the D-pad turn pages. Use "Load to screen" on the left to pick which screen the video goes to, and "Format" for 3D videos (SBS = side by side, OU = over/under, ½ = half-width).</p>
+    <p>In the media browser: A opens the folder or plays the video under the head cursor, B goes back up a folder (or closes the browser), LB / RB or the D-pad turn pages. Each screen remembers where it was in the browser. ⚙ Settings (top left of the browser) has the layout, curved screens, focus zoom, fit all in view, and the other options on this page, so you can change them without taking the headset off. Use "Load to screen" on the left to pick which screen the video goes to, and "Format" for 3D videos (SBS = side by side, OU = over/under, ½ = half-width).</p>
     <p>Picking a video makes the rest of its folder that screen's playlist. "When a video ends" (in the browser, or on the screen's card) chooses whether it stops, plays the next video in the folder, or plays the folder in random order. PLAY ALL and SHUFFLE at the top of the browser start the whole folder, and NEXT on a screen's control bar skips ahead.</p>
+    <p>Each screen's control bar has two rows: FILES, PREV −10 ▶ +10 NEXT, MUTE V− V+ SOLO, S− S+ LOOP SWAP on top, and the seek bar, time and file name underneath.</p>
+    <p>Focus zoom (a setting): the screen you look at slides toward you so it's bigger and sharper, and stays that way while you use its control bar. Fit all in view resizes every screen together so they fit within 90° across, with nothing more than 20° above your eyes (looking up is the tiring direction). Curved screens (on by default) wrap each screen around you so its edges don't stretch.</p>
+    <p>Cropping empty borders: turn on "CROP button on screen bars" and press CROP while the video plays. It looks for plain borders that stay still while the picture moves, of any colour. Press it again to undo. Right stick left / right, or the sliders on a screen's card, crop by hand. "Auto-crop every video" does this whenever something new loads. In the 3 wide and 4 wide layouts a cropped picture grows to fill the height.</p>
     <p>To rearrange screens, press SWAP on one screen's control bar (its frame blinks), then look at another screen and press A, or press that screen's SWAP button, which now reads HERE. The two trade places and keep playing. Press SWAP again to cancel; it also cancels itself after 15 seconds. On the PC, use "Swap places with…" on a screen's card.</p>
     <p>Photos: folders list your photos (JPG, PNG, WebP, GIF, AVIF, and JPS 3D photos) alongside videos. Pick one and that screen plays a slideshow of the folder's photos. Play/pause starts and stops it; "Each photo shows for" on the page, or T− / T+ on the screen's control bar (D-pad up/down on the controller), sets how long each photo stays. −10 / +10 and LB / RB go to the previous or next photo, and the seek bar jumps through the folder. The screen keeps its 3D format (SBS, OU, L⇄R) from photo to photo. JPS files switch to SBS with the eyes swapped automatically, since that's how they're stored. When a slideshow reaches the last photo it stops, unless LOOP is on; SHUFFLE plays the photos in random order.</p>
     <p>If the picture freezes while the sound keeps going: Chrome pauses video pictures when it thinks the page is hidden. Don't minimize the Chrome window or cover it completely with another window while you're in VR.</p>
@@ -185,6 +195,15 @@ const LAYOUTS = {
 };
 let layout = '2';
 let linkSize = false, needArrange = true;
+const NO_CROP = {l:0,r:0,t:0,b:0}; // defined up here because every screen starts with it when it's created
+let autoCropAll = false; // crop borders automatically on every new video and photo
+let showCropBtn = false; // CROP on each screen's control bar is optional
+// ---- experiments (branch experiment/curved-screens) ----
+let curved = true;       // screens bend onto the cylinder of radius R around you
+let focusOn = false;     // the screen you look at slides toward you
+const FOCUS_Z = 1.5;     // how much closer (and so how much bigger and sharper) the focused screen gets
+const mipOn = true;      // mipmapped video textures: smooth instead of shimmery when a screen is small
+const SCREEN_SEG = 48;   // columns in each screen mesh, so it can bend smoothly
 const PHOTO_STEPS = [1,2,3,4,5,7,10,15,20,30,45,60,120];
 let photoSecs = 5; // how long each photo in a slideshow stays up, shared by every screen
 const slotAt = [0,1,2,3]; // layout position -> slot index; swapping screens swaps entries here
@@ -243,31 +262,45 @@ function updateMouse(e){
 // ---------- helpers ----------
 const fmt = s => { if(!isFinite(s)) return '0:00'; s=Math.max(0,Math.floor(s)); const h=Math.floor(s/3600), m=Math.floor(s%3600/60), x=s%60;
   return (h? h+':'+String(m).padStart(2,'0') : m)+':'+String(x).padStart(2,'0'); };
-const BASE_UV = [0,1, 1,1, 0,0, 1,0];
+// map a screen mesh onto part of its texture (one eye's half of a 3D frame), for any number of vertices
 function setUV(geo,u0,u1,v0,v1){
-  const uv = geo.attributes.uv;
-  for(let i=0;i<4;i++) uv.setXY(i, u0+BASE_UV[i*2]*(u1-u0), v0+BASE_UV[i*2+1]*(v1-v0));
+  const uv = geo.attributes.uv, base = geo.userData.baseUV || (geo.userData.baseUV = uv.array.slice());
+  for(let i=0;i<uv.count;i++) uv.setXY(i, u0+base[i*2]*(u1-u0), v0+base[i*2+1]*(v1-v0));
   uv.needsUpdate = true;
 }
+// Bend a unit-width screen mesh (scaled to world width w) onto the cylinder of radius R centred on you,
+// or flatten it again. Every column then sits the same distance from your eyes. x is in unit space
+// (the mesh is scaled by w), z is in world units (z scale stays 1), so the curve is true at any size.
+function bendScreen(mesh,w,on){
+  const g=mesh.geometry, p=g.attributes.position;
+  const bx=g.userData.baseX || (g.userData.baseX=Array.from({length:p.count},(_,i)=>p.getX(i)));
+  for(let i=0;i<p.count;i++){
+    const x=bx[i];
+    if(on){ const a=x*w/R; p.setXYZ(i, R*Math.sin(a)/w, p.getY(i), R*(1-Math.cos(a))); }
+    else p.setXYZ(i, x, p.getY(i), 0);
+  }
+  p.needsUpdate=true; g.computeBoundingSphere(); g.computeBoundingBox(); // raycasting relies on these
+}
 
-// control bar geometry (canvas pixels, 1400x128)
-const BW=1500, BH=128;
-const SEEK = {x0:470, x1:850};
-const BUTTONS = [
-  {id:'open', x:10,  w:92, label:'FILES'},
-  {id:'back', x:105, w:80, label:'−10'},
-  {id:'play', x:190, w:90, label:'▶'},
-  {id:'fwd',  x:285, w:80, label:'+10'},
-  {id:'next', x:370, w:84, label:'NEXT'},
-  {id:'mute', x:865, w:80, label:'MUTE'},
-  {id:'vdn',  x:950, w:60, label:'V−'},
-  {id:'vup',  x:1015,w:60, label:'V+'},
-  {id:'solo', x:1080,w:75, label:'SOLO'},
-  {id:'sdn',  x:1165,w:60, label:'S−'},
-  {id:'sup',  x:1230,w:60, label:'S+'},
-  {id:'loop', x:1295,w:68, label:'LOOP'},
-  {id:'swap', x:1368,w:84, label:'SWAP'}
+// control bar: two rows on a 1200x208 canvas.
+// Top row: buttons, in groups (files | playback | sound | size, loop, swap).
+// Bottom row: seek slider, then the time (or photo count), then the file name.
+const BW=1280, BH=208, ROW2=112; // ROW2: where the bottom row starts
+const SEEK = {x0:20, x1:600};
+// [id, width, label] in groups; a wider gap separates groups. CROP only shows when that setting is on.
+const BTN_GROUPS = [
+  [['open',92,'FILES']],
+  [['prev',84,'PREV'],['back',80,'−10'],['play',90,'▶'],['fwd',80,'+10'],['next',84,'NEXT']],
+  [['mute',80,'MUTE'],['vdn',60,'V−'],['vup',60,'V+'],['solo',75,'SOLO']],
+  [['sdn',60,'S−'],['sup',60,'S+'],['crop',80,'CROP'],['loop',72,'LOOP'],['swap',88,'SWAP']]
 ];
+let barButtons = [];
+function layoutBarButtons(){
+  barButtons=[]; let x=10;
+  BTN_GROUPS.forEach((g,gi)=>{ if(gi) x+=15;
+    for(const [id,w,label] of g){ if(id==='crop' && !showCropBtn) continue; barButtons.push({id,x,w,label}); x+=w+5; } });
+}
+layoutBarButtons();
 // videos are kept in the page (tiny and invisible) rather than detached; Chrome is more willing
 // to throttle or suspend decoding of media elements that aren't in the document
 const videoHost=document.createElement('div');
@@ -280,10 +313,12 @@ function rr(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w
 class Slot{
   constructor(i){
     this.i=i; this.color=SLOT_COLORS_DARK[i];
+    this.scales={}; // this screen's size in each layout, so layouts don't inherit each other's sizes
     this.mode='2d'; this.swap=false; this.scale=1; this.baseW=2; this.baseH=2*9/16; this.loaded=false; this.name='';
     this.lastHover=0; this.hoverBtn=null; this.hoverSeek=null; this.barDirty=true; this.lastDraw=0;
     this.sort='az'; // this screen's folder sort in the media browser
     this.photo=null; this.slidePlaying=false; this.slideNext=0; this.photoTok=0; this.pre=null; // slideshow state
+    this.crop={...NO_CROP}; this.cropTry=0; // fractions cut from each edge of the picture (one eye's half, for 3D)
     this.list=null; this.order=null; this.pos=0; this.endMode='next'; // playlist: the folder the video came from
     this.lastT=-1; this.stallT=-1; this.stallSince=0;
     const v = this.video = document.createElement('video');
@@ -297,7 +332,7 @@ class Slot{
     p.fillStyle='#9a9eb9'; p.font='500 26px Barlow, Arial, sans-serif'; p.fillText('Press FILES below or the View button',320,220);
     this.placeTex = new THREE.CanvasTexture(pc);
 
-    const mk = () => new THREE.Mesh(new THREE.PlaneGeometry(1,1), new THREE.MeshBasicMaterial({map:this.placeTex}));
+    const mk = () => new THREE.Mesh(new THREE.PlaneGeometry(1,1,SCREEN_SEG,1), new THREE.MeshBasicMaterial({map:this.placeTex}));
     this.mono=mk(); this.left=mk(); this.right=mk();
     this.left.layers.set(1); this.right.layers.set(2);
     for(const m of [this.mono,this.left,this.right]) m.userData={slot:this,kind:'screen'};
@@ -305,20 +340,22 @@ class Slot{
     this.barCanvas=document.createElement('canvas'); this.barCanvas.width=BW; this.barCanvas.height=BH;
     this.barTex=new THREE.CanvasTexture(this.barCanvas);
     this.barMat=new THREE.MeshBasicMaterial({map:this.barTex,transparent:true,opacity:1,depthWrite:false});
-    this.bar=new THREE.Mesh(new THREE.PlaneGeometry(1,BH/BW), this.barMat);
+    this.bar=new THREE.Mesh(new THREE.PlaneGeometry(1,BH/BW,SCREEN_SEG,1), this.barMat); // columns so it can curve with the screen
     this.bar.userData={slot:this,kind:'bar'}; this.bar.position.z=0.01;
 
-    this.frame=new THREE.Mesh(new THREE.PlaneGeometry(1,1), new THREE.MeshBasicMaterial({color:new THREE.Color(this.color)}));
+    this.frame=new THREE.Mesh(new THREE.PlaneGeometry(1,1,SCREEN_SEG,1), new THREE.MeshBasicMaterial({color:new THREE.Color(this.color)}));
+    this.zoom=1; this.basePos=new THREE.Vector3(); // focus zoom moves the screen toward you from basePos
     this.frame.position.z=-0.01; this.frame.visible=false;
     this.group=new THREE.Group(); this.group.add(this.frame,this.mono,this.left,this.right,this.bar); world.add(this.group);
 
     v.addEventListener('loadedmetadata',()=>{
       // plain Texture, not VideoTexture: we upload only when the video has actually moved to a new frame (see the render loop)
-      if(!this.tex){ this.tex=new THREE.Texture(v); this.tex.minFilter=THREE.LinearFilter; this.tex.magFilter=THREE.LinearFilter; this.tex.generateMipmaps=false; }
+      if(!this.tex){ this.tex=new THREE.Texture(v); this.tex.magFilter=THREE.LinearFilter; setVideoFiltering(this.tex); }
       this.lastT=-1;
       for(const m of [this.mono,this.left,this.right]){ m.material.map=this.tex; m.material.needsUpdate=true; }
       this.loaded=true; this.applyMode(); this.err(''); this.syncUI();
       if(this.autoplay){ this.autoplay=false; this.play(); }
+      this.cropTry++; if(autoCropAll) this.autoCropSoon(this.cropTry);
     });
     v.addEventListener('error',()=>{
       this.err(v.src.startsWith('blob:') ? 'This file format can\'t be played by the browser. MP4 (H.264/H.265) or WebM usually work.'
@@ -336,9 +373,10 @@ class Slot{
   aspect(){
     const vw=this.photo? this.mw : this.video.videoWidth, vh=this.photo? this.mh : this.video.videoHeight;
     if(!vw||!vh) return 16/9;
+    const c=this.crop, k=(1-c.l-c.r)/(1-c.t-c.b);
     switch(this.mode){
-      case 'sbs': return (vw/2)/vh; case 'tb': return vw/(vh/2);
-      default: return vw/vh; // 2d, sbs-half, tb-half
+      case 'sbs': return (vw/2)/vh*k; case 'tb': return vw/(vh/2)*k;
+      default: return vw/vh*k; // 2d, sbs-half, tb-half
     }
   }
   applyMode(){
@@ -348,7 +386,10 @@ class Slot{
     if(this.mode.startsWith('sbs')){L=[0,.5,0,1];Rt=[.5,1,0,1];}
     if(this.mode.startsWith('tb')){L=[0,1,.5,1];Rt=[0,1,0,.5];}
     if(this.swap)[L,Rt]=[Rt,L];
-    setUV(this.left.geometry,...L); setUV(this.right.geometry,...Rt);
+    // crop inside each eye's part of the frame (v=1 is the top of the picture)
+    const c=this.crop, cut=([u0,u1,v0,v1])=>{ const du=u1-u0, dv=v1-v0; return [u0+du*c.l, u1-du*c.r, v0+dv*c.b, v1-dv*c.t]; };
+    setUV(this.mono.geometry,...cut([0,1,0,1]));
+    setUV(this.left.geometry,...cut(L)); setUV(this.right.geometry,...cut(Rt));
     this.updateSize();
   }
   updateSize(){
@@ -356,18 +397,68 @@ class Slot{
     // is limited by the box height instead of towering over the others
     const bw0=this.baseW*this.scale, bh0=this.baseH*this.scale, a=this.aspect();
     const w=Math.min(bw0,bh0*a), h=w/a;
-    for(const m of [this.mono,this.left,this.right]) m.scale.set(w,h,1);
-    this.frame.scale.set(w+0.07,h+0.07,1);
-    const bw=Math.max(w,1.2); this.bar.scale.set(bw,bw,1);
-    this.bar.position.y = -h/2 - 0.03 - bw*(BH/BW)/2;
-    this.dims={w:Math.max(w+0.07,bw), h:h+0.07, bar:0.03+bw*(BH/BW)};
+    for(const m of [this.mono,this.left,this.right]){ m.scale.set(w,h,1); bendScreen(m,w,curved); }
+    this.frame.scale.set(w+0.07,h+0.07,1); bendScreen(this.frame,w+0.07,curved);
+    const bw=Math.max(w,1.2), bh=bw*(BH/BW); this.bar.scale.set(bw,bw,1); bendScreen(this.bar,bw,curved);
+    this.bar.position.y = -h/2-0.03-bh/2; // below the picture, never over it
+    // w: widest part (screen or bar); sw: the framed screen; bw: the bar (always flat); vw: the picture alone
+    this.dims={w:Math.max(w+0.07,bw), sw:w+0.07, bw, vw:w, h:h+0.07, bar:0.03+bh};
     needArrange=true;
   }
   place(on,baseW,baseH){
     this.group.visible=on; if(!on) return;
     this.baseW=baseW; this.baseH=baseH; this.updateSize();
   }
-  setScale(v){ this.scale=Math.max(0.4,Math.min(2.5,+v.toFixed(3))); this.updateSize(); this.syncUI(); }
+  // ----- crop -----
+  isCropped(){ const c=this.crop; return c.l+c.r+c.t+c.b>0.001; }
+  setCrop(c){
+    const k=v=>Math.max(0,Math.min(0.45,+v||0));
+    this.crop={l:k(c.l),r:k(c.r),t:k(c.t),b:k(c.b)};
+    this.applyMode(); this.barDirty=true; this.syncUI();
+  }
+  // right stick left/right: cut both sides in or out by hand (for borders auto-crop can't see, like blurred sides)
+  cropSides(d){
+    const c=this.crop; this.setCrop({...c, l:c.l+d, r:c.r+d});
+    this.flashMsg(this.isCropped()? 'Crop sides '+Math.round((this.crop.l+this.crop.r)*50)+'%' : 'Crop off');
+  }
+  // Find empty borders and cut them. While a video plays it takes six samples 0.35 s apart and uses
+  // movement: a border is plain (any colour, a little noise is fine) AND doesn't change while the
+  // picture beside it does. Plain alone could be a dark scene; still alone could be the room behind a
+  // dancer on a fixed camera, so it takes both. Paused videos and photos only have one frame, so
+  // there it falls back to plain and near-black or near-white. quiet: called automatically, so say
+  // nothing when there's nothing to crop.
+  async autoCrop(quiet){
+    if(!this.loaded) return false;
+    const tok=this.cropTry;
+    const eye= this.mode.startsWith('sbs')? [0,0,.5,1] : this.mode.startsWith('tb')? [0,0,1,.5] : [0,0,1,1];
+    const v=this.video, playing=!this.photo && !v.paused;
+    if(!quiet) this.flashMsg(playing? 'Looking for borders…' : 'Looking for borders (works best while playing)…');
+    const S=[];
+    try{
+      for(let i=0;i<(playing? 6 : 1);i++){
+        if(i) await new Promise(r=>setTimeout(r,350));
+        if(tok!==this.cropTry) return false; // the media changed meanwhile
+        if(this.photo){ if(this.cur) S.push(sampleLum(this.cur.bmp,this.cur.bmp.width,this.cur.bmp.height,eye)); }
+        else if(v.readyState>=2) S.push(sampleLum(v,v.videoWidth,v.videoHeight,eye));
+      }
+    }catch(e){ if(!quiet) this.flashMsg('Can\'t read this video\'s pixels'); return false; }
+    if(!S.length) return null;
+    const best=findBorders(S);
+    if(!best) return null; // the picture looked blank (a fade, a title card): try again later
+    if(best.l+best.r+best.t+best.b<0.001){
+      if(!quiet) this.flashMsg(playing? 'No borders found. Right stick ←/→ crops by hand' : 'No borders found. Try while it plays, or right stick ←/→');
+      return false;
+    }
+    this.setCrop(best); this.flashMsg('Cropped the borders'); return true;
+  }
+  // for auto-crop on load: first look 1.5 s in, then again at 6 s and 15 s if the picture was still blank
+  autoCropSoon(tok){
+    [1500,6000,15000].reduce((p,ms,i,arr)=>p.then(done=>{
+      if(done!==null || tok!==this.cropTry) return done;
+      return new Promise(r=>setTimeout(r, ms-(i? arr[i-1] : 0))).then(()=> tok===this.cropTry? this.autoCrop(true) : false);
+    }), Promise.resolve(null));
+  }
+  setScale(v){ this.scale=Math.max(0.2,Math.min(2.5,+v.toFixed(3))); this.scales[layout]=this.scale; this.updateSize(); this.syncUI(); }
   // ----- playlist -----
   setList(list,cur){ this.list=list; this.buildOrder(cur); }
   buildOrder(cur){
@@ -392,7 +483,7 @@ class Slot{
     catch(err){ this.err('Couldn\'t open '+e.name+': '+(err.message||err)); }
   }
   loadFile(f,keepList){
-    this.leavePhoto();
+    this.leavePhoto(); this.crop={...NO_CROP};
     if(!keepList) this.list=null;
     if(this.url) URL.revokeObjectURL(this.url);
     this.url=URL.createObjectURL(f); this.name=f.name; this.loaded=false;
@@ -400,7 +491,7 @@ class Slot{
   }
   loadURL(u){
     this.list=null; this.name=u.split('/').pop().split('?')[0]||u; this.loaded=false;
-    this.leavePhoto();
+    this.leavePhoto(); this.crop={...NO_CROP};
     this.video.crossOrigin='anonymous'; this.video.src=u; this.video.load(); this.syncUI();
   }
   toggle(){ if(!this.loaded) return; this.isPaused() ? this.play() : this.pause(); }
@@ -424,7 +515,9 @@ class Slot{
     const t=im.tex || (im.tex=photoTexture(im.bmp));
     for(const m of [this.mono,this.left,this.right]){ m.material.map=t; m.material.needsUpdate=true; }
     if(/\.jps$/i.test(e.name) && this.mode==='2d'){ this.mode='sbs'; this.swap=true; } // JPS is stored side by side, right eye first
+    this.crop={...NO_CROP}; this.cropTry++;
     this.name=e.name; this.loaded=true; this.applyMode(); this.err('');
+    if(autoCropAll) this.autoCrop(true);
     if(this.autoplay){ this.autoplay=false; this.slidePlaying=true; }
     this.slideNext=performance.now()+photoSecs*1000;
     this.barDirty=true; this.syncUI(); lib.dirty=true;
@@ -461,14 +554,16 @@ class Slot{
     if(this.photo){ this.slidePlaying=true; this.slideNext=performance.now()+photoSecs*1000; this.barDirty=true; this.syncUI(); return; }
     this.video.play().catch(()=>setStatus('The browser blocked playback. Press play once on the page, then it will work in VR too.')); }
   seek(t){ if(!this.loaded || this.photo) return; const d=this.video.duration||0; this.video.currentTime=Math.max(0,Math.min(d-0.1,t)); this.barDirty=true; }
-  vol(dv){ if(this.photo){ stepPhotoSecs(dv>0?1:-1); return; } const v=this.video; v.volume=Math.max(0,Math.min(1,+(v.volume+dv).toFixed(2))); if(v.volume>0) v.muted=false; }
+  vol(dv){ if(this.photo){ stepPhotoSecs(dv>0?1:-1); return; } const v=this.video; v.volume=Math.max(0,Math.min(1,+(v.volume+dv).toFixed(2))); if(v.volume>0) v.muted=false; this.flashMsg('Volume '+Math.round(v.volume*100)+'%'); }
   solo(){ slots.forEach(s=>s.video.muted = s!==this); }
   resize(f){ sizeTo(this,this.scale*f); }
   action(id,frac){
     const v=this.video;
     switch(id){
       case 'open': openBrowser(this.i); break;
+      case 'prev': this.next(-1); break;
       case 'next': this.next(1); break;
+      case 'crop': if(this.isCropped()){ this.setCrop(NO_CROP); this.flashMsg('Crop off'); } else this.autoCrop(false); break;
       case 'swap': if(!swapFrom) startSwap(this); else if(swapFrom===this) endSwap(); else swapScreens(swapFrom,this); break;
       case 'play': this.toggle(); break;
       case 'back': this.photo? this.next(-1) : this.seek(v.currentTime-10); break;
@@ -485,43 +580,55 @@ class Slot{
     this.barDirty=true;
   }
   hitBar(uv){
-    const x=uv.x*BW;
-    if(x>=SEEK.x0 && x<=SEEK.x1) return {id:'seek', frac:(x-SEEK.x0)/(SEEK.x1-SEEK.x0)};
-    const b=BUTTONS.find(b=>x>=b.x && x<=b.x+b.w); return b?{id:b.id}:null;
+    const x=uv.x*BW, y=(1-uv.y)*BH;
+    if(y>=ROW2) return x>=SEEK.x0 && x<=SEEK.x1? {id:'seek', frac:Math.max(0,Math.min(1,(x-SEEK.x0-10)/(SEEK.x1-SEEK.x0-20)))} : null;
+    const b=barButtons.find(b=>x>=b.x && x<=b.x+b.w); return b?{id:b.id}:null;
   }
+  // a short message in the bar's name area, e.g. after changing the volume
+  flashMsg(t){ this.flash=t; this.flashUntil=performance.now()+1500; this.barDirty=true; }
   drawBar(){
     const c=this.barCanvas.getContext('2d'), v=this.video;
     c.clearRect(0,0,BW,BH);
     c.fillStyle='rgba(14,16,28,0.92)'; rr(c,0,0,BW,BH,26); c.fill();
     c.fillStyle=this.color; rr(c,0,0,10,BH,5); c.fill();
     c.textAlign='center'; c.textBaseline='middle';
-    for(const b of BUTTONS){
-      let on = (b.id==='mute'&&v.muted)||(b.id==='loop'&&v.loop)||(b.id==='solo'&&!v.muted&&slots.every(s=>s===this||s.video.muted))||(b.id==='swap'&&swapFrom===this);
+    for(const b of barButtons){
+      let on = (b.id==='mute'&&v.muted)||(b.id==='loop'&&v.loop)||(b.id==='solo'&&!v.muted&&slots.every(s=>s===this||s.video.muted))||(b.id==='swap'&&swapFrom===this)||(b.id==='crop'&&this.isCropped());
       const here = b.id==='swap' && swapFrom && swapFrom!==this; // the other screens offer themselves as the swap target
-      c.globalAlpha = b.id==='next' && !(this.list&&this.list.length>1)? 0.4 : 1;
+      c.globalAlpha = (b.id==='next'||b.id==='prev') && !(this.list&&this.list.length>1)? 0.4 : 1;
       c.fillStyle = here? swapFrom.color : on? this.color : (this.hoverBtn===b.id? '#454b72':'#262b45');
-      rr(c,b.x+4,20,b.w-8,88,16); c.fill();
+      rr(c,b.x+4,16,b.w-8,88,16); c.fill();
       c.fillStyle= on||here? '#10121f':'#e9e8f2';
       let label=b.label; if(b.id==='play') label = this.isPaused()? '▶':'❚❚'; if(here) label='HERE';
       if(this.photo && b.id==='vdn') label='T−'; if(this.photo && b.id==='vup') label='T+'; // photo timer
       c.font = (b.id==='play'?'700 44px':'700 30px')+' "Barlow Condensed", Arial Narrow, sans-serif';
-      c.fillText(label,b.x+b.w/2,65);
+      c.fillText(label,b.x+b.w/2,61);
       c.globalAlpha=1;
     }
-    // seek
+    // bottom row: seek slider
     const d=v.duration||0, t=v.currentTime||0, f=this.photo? this.photoFrac() : d? t/d:0;
-    const ty=84, tx0=SEEK.x0+10, tx1=SEEK.x1-10;
-    c.fillStyle='#343a5a'; rr(c,tx0,ty-6,tx1-tx0,12,6); c.fill();
-    c.fillStyle=this.color; rr(c,tx0,ty-6,Math.max(12,(tx1-tx0)*f),12,6); c.fill();
-    c.beginPath(); c.arc(tx0+(tx1-tx0)*f,ty,13,0,Math.PI*2); c.fill();
-    if(this.hoverSeek!=null){ c.fillStyle='#fff'; c.fillRect(tx0+(tx1-tx0)*this.hoverSeek-2,ty-18,4,36); }
-    c.textAlign='left'; c.fillStyle='#e9e8f2'; c.font='600 28px Barlow, Arial, sans-serif';
-    let top = this.loaded ? fmt(this.hoverSeek!=null&&d? this.hoverSeek*d : t)+' / '+fmt(d) : 'Screen '+(this.i+1)+': no video';
-    if(this.photo) top='Photo '+(this.pos+1)+' / '+(this.list? this.list.length : 1);
-    c.fillText(top,tx0,40);
-    c.textAlign='right'; c.fillStyle='#9a9eb9'; c.font='500 24px Barlow, Arial, sans-serif';
-    const pl=this.list&&this.list.length>1? (this.pos+1)+'/'+this.list.length+(this.endMode==='shuffle'?' shuffle':this.endMode==='next'?' next':'')+'  ' : '';
-    c.fillText(this.photo? pl+photoSecs+'s each' : pl+'vol '+Math.round(v.volume*100)+(v.playbackRate!==1?'  ×'+v.playbackRate:''),tx1,40);
+    const ty=ROW2+48, tx0=SEEK.x0+10, tx1=SEEK.x1-10;
+    c.fillStyle='#343a5a'; rr(c,tx0,ty-7,tx1-tx0,14,7); c.fill();
+    c.fillStyle=this.color; rr(c,tx0,ty-7,Math.max(14,(tx1-tx0)*f),14,7); c.fill();
+    c.beginPath(); c.arc(tx0+(tx1-tx0)*f,ty,15,0,Math.PI*2); c.fill();
+    if(this.hoverSeek!=null){ c.fillStyle='#fff'; c.fillRect(tx0+(tx1-tx0)*this.hoverSeek-2,ty-22,4,44); }
+    // ...then the time (or photo count)...
+    let count = this.loaded ? fmt(this.hoverSeek!=null&&d? this.hoverSeek*d : t)+' / '+fmt(d) : 'No video';
+    if(this.photo) count='Photo '+(this.pos+1)+' / '+(this.list? this.list.length : 1);
+    c.textAlign='left'; c.fillStyle='#e9e8f2'; c.font='600 30px Barlow, Arial, sans-serif';
+    const cx=SEEK.x1+20; c.fillText(count,cx,ty+1);
+    // ...then the file name, cut short to fit. A recent change (volume, photo time) shows here briefly,
+    // and "Show sharpness" takes the spot while it's on.
+    const nx=cx+c.measureText(count).width+28, nw=BW-12-nx;
+    if(this.flashUntil && performance.now()>this.flashUntil) this.flashUntil=0;
+    let info, col='#9a9eb9';
+    if(this.flashUntil){ info=this.flash; col=this.color; }
+    else {
+      const pl=this.list&&this.list.length>1? (this.pos+1)+'/'+this.list.length+(this.endMode==='shuffle'?' shuffled':'')+'  ·  ' : '';
+      info=this.name? pl+this.name.replace(/\.[^.]+$/,'') : 'Screen '+(this.i+1);
+    }
+    c.fillStyle=col; c.font='500 26px Barlow, Arial, sans-serif';
+    if(nw>40) c.fillText(fit(c,info,nw),nx,ty+1);
     this.barTex.needsUpdate=true; this.barDirty=false; this.lastDraw=performance.now();
   }
   // ----- desktop card -----
@@ -556,12 +663,23 @@ class Slot{
         <button data-a="next">Next video</button>
       </div>
       <div class="row">
-        <span class="lbl">Size</span><input type="range" min="40" max="250" value="100" data-r="size" aria-label="Screen size">
+        <span class="lbl">Size</span><input type="range" min="20" max="250" value="100" data-r="size" aria-label="Screen size">
         <select data-r="swapwith" aria-label="Swap places with another screen"><option value="">Swap places with…</option></select>
+      </div>
+      <div class="row">
+        <span class="lbl">Crop</span>
+        <button data-r="cropauto">Auto</button>
+        <span class="lbl">Sides</span><input type="range" min="0" max="45" value="0" data-r="cropx" aria-label="Crop sides">
+        <span class="lbl">Top/bottom</span><input type="range" min="0" max="45" value="0" data-r="cropy" aria-label="Crop top and bottom">
+        <button data-r="cropoff">No crop</button>
       </div>
       <div class="err" data-r="err"></div>`;
     const q=s=>el.querySelector(`[data-r="${s}"]`);
-    this.ui={el,name:q('name'),play:q('play'),seek:q('seek'),time:q('time'),vol:q('vol'),mute:q('mute'),loop:q('loop'),rate:q('rate'),size:q('size'),err:q('err'),url:q('url'),endmode:q('endmode')};
+    this.ui={el,name:q('name'),play:q('play'),seek:q('seek'),time:q('time'),vol:q('vol'),mute:q('mute'),loop:q('loop'),rate:q('rate'),size:q('size'),err:q('err'),url:q('url'),endmode:q('endmode'),cropx:q('cropx'),cropy:q('cropy')};
+    q('cropauto').addEventListener('click',()=>this.autoCrop(false));
+    q('cropoff').addEventListener('click',()=>this.setCrop(NO_CROP));
+    this.ui.cropx.addEventListener('input',()=>{ const v=this.ui.cropx.value/100; this.setCrop({...this.crop,l:v,r:v}); });
+    this.ui.cropy.addEventListener('input',()=>{ const v=this.ui.cropy.value/100; this.setCrop({...this.crop,t:v,b:v}); });
     const sw=q('swapwith');
     const fillSwap=()=>{ sw.innerHTML='<option value="">Swap places with…</option>'+visible().filter(s=>s!==this).map(s=>`<option value="${s.i}">Screen ${s.i+1}</option>`).join(''); };
     sw.addEventListener('pointerdown',fillSwap); sw.addEventListener('focus',fillSwap);
@@ -594,6 +712,7 @@ class Slot{
     u.play.textContent = this.isPaused()? 'Play':'Pause';
     u.mute.classList.toggle('on',v.muted); u.loop.classList.toggle('on',v.loop);
     u.vol.value=Math.round(v.volume*100); u.size.value=Math.round(this.scale*100);
+    u.cropx.value=Math.round((this.crop.l+this.crop.r)*50); u.cropy.value=Math.round((this.crop.t+this.crop.b)*50);
     this.syncTime();
   }
   syncTime(){
@@ -610,8 +729,137 @@ slots.forEach(s=>slotsEl.appendChild(s.buildCard()));
 slots.forEach(s=>s.syncUI());
 
 // Lay screens out edge to edge around you, using each screen's current size, so they can never overlap.
-// Each screen is a flat panel facing you at distance R, so it covers an angle of 2*atan(w/2R).
+// A flat screen facing you at distance R covers an angle of 2*atan(w/2R); a curved one lies on the
+// cylinder of radius R, so it covers exactly w/R. The bar under it stays flat either way.
 const H_GAP=0.1, V_GAP=0.1, MIN_BOTTOM=0.2;
+// Screens are spaced by their pictures when bars auto-hide: a bar (at least 1.2 m wide, so its buttons
+// stay usable) only shows while you look at it, so it may reach under a neighbour. With bars always
+// showing, the spacing keeps room for them.
+function screenAngle(d){
+  if(autoHide) return curved? d.sw/R : 2*Math.atan(d.sw/(2*R));
+  return curved? Math.max(d.sw/R, 2*Math.atan(d.bw/(2*R))) : 2*Math.atan(d.w/(2*R));
+}
+// Horizontal and vertical angle (degrees) the whole layout would cover if every screen were k times its size.
+function layoutSpan(k){
+  const L=LAYOUTS[layout]; let hMax=0, vTot=0;
+  for(const row of L.rows){
+    const ss=row.map(p=>slots[slotAt[p]]); let a=0, rh=0, rb=0;
+    ss.forEach((s,i)=>{
+      const vw=s.dims.vw*k, bw=Math.max(vw,1.2);
+      a+=screenAngle({w:Math.max(vw+0.07,bw), sw:vw+0.07, bw}) + (i? H_GAP/R : 0);
+      rh=Math.max(rh,(s.dims.h-0.07)*k+0.07); rb=Math.max(rb,0.03+bw*(BH/BW));
+    });
+    hMax=Math.max(hMax,a); vTot+=rh+rb;
+  }
+  vTot+=V_GAP*(L.rows.length-1);
+  return {h:hMax*180/Math.PI, v:2*Math.atan(vTot/(2*R))*180/Math.PI};
+}
+// Scale every visible screen together so the whole layout fits inside deg° across (and 0.8 of that
+// vertically, since headsets see less up-down than side to side). Relative sizes are kept.
+// Fit to the space you can comfortably watch: at most deg° across, and nothing higher than FIT_UP_DEG
+// above your eyes (looking up is the tiring direction; looking down is limited by the floor, which the
+// layout already respects by lifting screens). Each try really lays the screens out and measures the
+// result, so the floor's push upward is included.
+const FIT_UP_DEG=20;
+function topAngle(list){ let m=-90; for(const s of list) m=Math.max(m, Math.atan2(s.group.position.y+s.dims.h/2-eyeY, R)*180/Math.PI); return m; }
+function fitInView(deg){
+  const vis=visible(); if(!vis.length) return;
+  const base=vis.map(s=>s.scale);
+  const tryK=k=>{ vis.forEach((s,i)=>{ s.scale=Math.max(0.2,Math.min(2.5,base[i]*k)); s.updateSize(); }); arrange();
+    return layoutSpan(1).h<=deg && topAngle(vis)<=FIT_UP_DEG; };
+  if(!tryK(0.2/Math.min(...base))){ // even the smallest size doesn't fit: leave the screens as they were
+    vis.forEach((s,i)=>s.setScale(base[i])); arrange();
+    setStatus("These screens cannot be made to fit within "+deg+"°, so their sizes were left alone."); return;
+  }
+  let lo=0.05, hi=10;
+  for(let i=0;i<30;i++){ const mid=(lo+hi)/2; if(tryK(mid)) lo=mid; else hi=mid; }
+  vis.forEach((s,i)=>s.setScale(base[i]*lo)); arrange();
+  setStatus(`Fitted: the screens cover ${layoutSpan(1).h.toFixed(0)}° across, and their top edge is ${topAngle(vis).toFixed(0)}° above your eyes.`);
+}
+// Video textures: with mipmaps, a big video on a small screen is averaged down smoothly instead of
+// skipping pixels, which is what makes small screens shimmer and crawl.
+function setVideoFiltering(t){
+  t.generateMipmaps=mipOn; t.minFilter=mipOn? THREE.LinearMipmapLinearFilter : THREE.LinearFilter;
+  t.anisotropy=mipOn? renderer.capabilities.getMaxAnisotropy() : 1; t.needsUpdate=true;
+}
+// Focus zoom: the screen you've looked at for a moment slides straight toward you, so it covers a
+// bigger angle and gets more of the headset's pixels; the rest stay put. It's chosen by the angle
+// between your gaze and each screen's resting centre (not by raycast), so a zoomed screen can't block
+// you from picking the one beside it.
+const _fo=new THREE.Vector3(), _fv=new THREE.Vector3(), _fp=new THREE.Vector3();
+let focusSlot=null, focusCand=null, focusSince=0;
+function updateFocus(now){
+  let best=null;
+  if(focusOn && !lib.open && (renderer.xr.isPresenting || padActive)){
+    if(!renderer.xr.isPresenting) camera.updateMatrixWorld();
+    _fo.setFromMatrixPosition(camera.matrixWorld);
+    _fv.set(0,0,-1).transformDirection(camera.matrixWorld);
+    world.updateMatrixWorld();
+    let bestA=Infinity;
+    for(const s of visible()){
+      _fp.copy(s.basePos).applyMatrix4(world.matrixWorld).sub(_fo);
+      const d=_fp.length()/(s===focusSlot? s.zoom : 1); // the focused screen counts at its zoomed size, so it doesn't flicker off
+      const half=Math.max(Math.atan2(s.dims.sw/2,d), Math.atan2(s.dims.h/2,d));
+      const a=_fv.angleTo(_fp);
+      if(a<half*1.05 && a<bestA){ bestA=a; best=s; }
+    }
+  }
+  // Looking at (or pointing at) a screen's control bar keeps that screen in focus: the bar sits below
+  // the picture, outside the angle checked above, and zooming out under your gaze made it hard to use.
+  if(focusOn && gazeHit && gazeHit.kind==='bar' && gazeHit.slot) best=gazeHit.slot;
+  else if(focusOn && focusSlot && now-(focusSlot.lastBarLook||0)<600) best=focusSlot;
+  if(best!==focusCand){ focusCand=best; focusSince=now; }
+  if(now-focusSince>350) focusSlot=focusCand; // a short dwell, so glancing across doesn't pop every screen
+  for(const s of visible()){
+    const target= s===focusSlot? FOCUS_Z : 1;
+    if(s.zoom===target) continue;
+    s.zoom+=(target-s.zoom)*0.12; if(Math.abs(target-s.zoom)<0.002) s.zoom=target;
+    const z=s.zoom, b=s.basePos;
+    s.group.position.set(b.x/z, eyeY+(b.y-eyeY)/z, b.z/z); // along the line to your eyes
+  }
+}
+let xrScaleUsed=1; // the VR render resolution in use (set when entering VR)
+// ---- crop ----
+// Border detection works on small greyscale samples of one eye's part of the frame.
+// eye = [x0,y0,x1,y1] as fractions with the origin at the top left.
+const CW=160, CH=90;
+const cropCanvas=document.createElement('canvas'); cropCanvas.width=CW; cropCanvas.height=CH;
+const cropCtx=cropCanvas.getContext('2d',{willReadFrequently:true});
+function sampleLum(src,sw,sh,eye){
+  cropCtx.drawImage(src, eye[0]*sw, eye[1]*sh, (eye[2]-eye[0])*sw, (eye[3]-eye[1])*sh, 0,0,CW,CH);
+  const d=cropCtx.getImageData(0,0,CW,CH).data, L=new Float32Array(CW*CH); // throws for cross-origin video without CORS
+  for(let i=0;i<CW*CH;i++) L[i]=0.299*d[i*4]+0.587*d[i*4+1]+0.114*d[i*4+2];
+  return L;
+}
+// S: luminance samples, oldest first. Walks in from each edge while the whole column (or row) is a
+// border, and returns the crop as fractions, or null if the picture looked blank.
+function findBorders(S){
+  const W=CW, H=CH, n=S.length;
+  const colAt=x=>y=>y*W+x, rowAt=y=>x=>y*W+x;
+  const stats=(f,len,at)=>{ let a=0,a2=0; for(let k=0;k<len;k++){ const v=f[at(k)]; a+=v; a2+=v*v; } const m=a/len; return {m, sd:Math.sqrt(Math.max(0,a2/len-m*m))}; };
+  // average change between consecutive samples along one column/row
+  const motion=(len,at)=>{ let t=0; for(let k=1;k<n;k++) for(let j=0;j<len;j++){ const i=at(j); t+=Math.abs(S[k][i]-S[k-1][i]); } return t/(len*(n-1)); };
+  // movement in the middle of the picture tells whether movement can be trusted at all (a still shot can't)
+  let mid=0, cols=0; if(n>=3) for(let x=Math.floor(W*0.4);x<Math.ceil(W*0.6);x++){ mid+=motion(H,colAt(x)); cols++; }
+  mid= cols? mid/cols : 0;
+  const useMotion= n>=3 && mid>1.5, still=Math.min(3, Math.max(0.8, mid*0.2)); // still in absolute terms too: compression noise is ~1-2
+  const isBorder=(len,at)=>{
+    for(const f of S){ const st=stats(f,len,at);
+      if(st.sd>12) return false;                               // has detail: picture
+      if(!useMotion && st.m>=40 && st.m<=215) return false;     // one frame only: trust just near-black / near-white
+    }
+    return !useMotion || motion(len,at)<still;                  // and it must hold still while the picture moves
+  };
+  let l=0; while(l<W*0.45 && isBorder(H,colAt(l))) l++;
+  let r=0; while(r<W*0.45 && isBorder(H,colAt(W-1-r))) r++;
+  let t=0; while(t<H*0.45 && isBorder(W,rowAt(t))) t++;
+  let b=0; while(b<H*0.45 && isBorder(W,rowAt(H-1-b))) b++;
+  if(l+r>W*0.85 || t+b>H*0.85) return null;
+  // ignore slivers; otherwise cut half a sample further in, so a soft edge line doesn't show
+  const fr=(px,len)=> px<len*0.02? 0 : Math.min(0.45,(px+0.5)/len);
+  return {l:fr(l,W), r:fr(r,W), t:fr(t,H), b:fr(b,H)};
+}
+document.getElementById('fitView').onclick=()=>fitInView(90);
 function arrange(){
   needArrange=false;
   const L=LAYOUTS[layout], rows=L.rows.map(r=>r.map(p=>slots[slotAt[p]]));
@@ -622,13 +870,18 @@ function arrange(){
   let top = rows.length===1? cy+rowH[0]/2 : cy+total/2;
   top += Math.max(0, MIN_BOTTOM-(top-total));
   rows.forEach((r,ri)=>{
-    const y=top-rowH[ri]/2;
-    const ang=r.map(s=>2*Math.atan(s.dims.w/(2*R))), gap=H_GAP/R;
+    const rowY=top-rowH[ri]/2;
+    const ang=r.map(s=>screenAngle(s.dims)), gap=H_GAP/R;
     let a=(ang.reduce((x,v)=>x+v,0)+gap*(r.length-1))/2; // leftmost edge (positive yaw is to your left)
     r.forEach((s,k)=>{
       const c=a-ang[k]/2;
-      s.group.position.set(-R*Math.sin(c), y, -R*Math.cos(c));
-      s.group.lookAt(0,y,0);
+      // In a single row each screen centres on your eyes by itself, and only a screen that would reach
+      // the floor rises, and only as far as it must. (Lifting the whole row for one big tall screen
+      // left the short screens beside it above eye level.) Grid rows still stack together.
+      const y= rows.length===1? Math.max(cy, MIN_BOTTOM+s.dims.bar+s.dims.h/2) : rowY;
+      s.basePos.set(-R*Math.sin(c), y, -R*Math.cos(c));
+      s.group.position.copy(s.basePos); s.zoom=1;
+      s.group.lookAt(0,eyeY,0); // tilted to face your eyes when it sits above or below them
       a-=ang[k]+gap;
     });
     top-=rowH[ri]+rowB[ri]+V_GAP;
@@ -656,7 +909,7 @@ function stepPhotoSecs(d){
 function setPhotoSecs(v){
   photoSecs=v; photoSel.value=String(v);
   const now=performance.now();
-  for(const s of slots) if(s.photo){ if(s.slidePlaying) s.slideNext=now+v*1000; s.barDirty=true; } // restart the current photo's timer
+  for(const s of slots) if(s.photo){ if(s.slidePlaying) s.slideNext=now+v*1000; s.flashMsg('Each photo: '+v+' s'); } // restart the current photo's timer
 }
 const photoSel=document.getElementById('photoSecs');
 photoSel.innerHTML=PHOTO_STEPS.map(v=>`<option value="${v}">${v<60? v+' seconds' : (v/60)+(v===60?' minute':' minutes')}</option>`).join('');
@@ -664,7 +917,8 @@ photoSel.value=String(photoSecs);
 photoSel.onchange=()=>setPhotoSecs(+photoSel.value);
 function applyLayout(l){
   layout=l; const L=LAYOUTS[l], shown=new Set(L.rows.flat().map(p=>slotAt[p]));
-  slots.forEach((s,i)=>{ const on=shown.has(i); s.place(on,L.w,L.h||L.w*9/16); s.ui.el.hidden=!on; if(!on) s.pause(); });
+  // each layout starts with every screen the same size, and keeps any resizing (or Fit) done in it
+  slots.forEach((s,i)=>{ const on=shown.has(i); s.scale=s.scales[l]??1; s.place(on,L.w,L.h||L.w*9/16); s.syncUI(); s.ui.el.hidden=!on; if(!on) s.pause(); });
   arrange();
   document.querySelectorAll('#layoutSeg button').forEach(b=>b.setAttribute('aria-pressed', b.dataset.l===l));
   if(typeof selected==='number' && !slots[selected].group.visible) setSelected(0);
@@ -677,8 +931,6 @@ document.getElementById('playAll').onclick=()=>visible().forEach(s=>s.play());
 document.getElementById('pauseAll').onclick=()=>visible().forEach(s=>s.pause());
 document.getElementById('restartAll').onclick=()=>visible().forEach(s=>{ if(s.photo){ s.pos=0; s.autoplay=true; s.next(0); } else if(s.loaded){s.video.currentTime=0; s.play();} });
 document.getElementById('muteAll').onclick=()=>slots.forEach(s=>s.video.muted=true);
-document.getElementById('autoHide').onchange=e=>autoHide=e.target.checked;
-document.getElementById('linkSize').onchange=e=>{ linkSize=e.target.checked; if(linkSize) sizeTo(slots[selected],slots[selected].scale); };
 
 // ---------- raycasting ----------
 function targets(){ const t=[]; if(lib.open) t.push(panel); for(const s of visible()) t.push(s.bar, s.mode==='2d'? s.mono : s.left); return t; }
@@ -692,6 +944,7 @@ function raycastFrom(rc){ rc.layers.enable(1); const h=rc.intersectObjects(targe
   return {slot,kind,dist:h.distance};
 }
 function activate(hit){
+  if(hit.kind==='bar' && hit.slot.barMat.opacity<0.6){ hit.slot.toggle(); return; } // bar not showing yet: it's the picture
   // second half of a swap: pick the other screen by clicking it or its HERE button
   if(swapFrom && hit.slot && hit.slot!==swapFrom && (hit.kind==='screen' || (hit.btn && hit.btn.id==='swap'))){ swapScreens(swapFrom,hit.slot); return; }
   if(hit.kind==='panel'){ if(hit.btn) browserClick(hit.btn); }
@@ -905,18 +1158,20 @@ function queueThumbs(){
 const pageCount=()=>Math.max(1,Math.ceil(lib.entries.length/PER_PAGE));
 const pageEntries=()=>lib.entries.slice(lib.page*PER_PAGE,(lib.page+1)*PER_PAGE);
 
+// back on the page this screen was on when it last used the browser
+function restorePage(){ if(lib.restorePage){ lib.page=Math.min(lib.restorePage,pageCount()-1); lib.restorePage=0; } }
 async function refreshDir(){
   const gen=++lib.gen; lib.page=0; lib.note=''; clearThumbQ();
   if(!lib.path.length){
     lib.entries=lib.roots.map(r=>({name:r.name,kind:'dir',root:r,key:'root:'+r.id}));
     lib.msg=lib.roots.length? '' : 'No video folders yet.\nTake off the headset, click "Add video folder…" on the page\nand choose the folder your videos are in. You only do this once.';
-    lib.dirty=true; return;
+    restorePage(); lib.dirty=true; return;
   }
   lib.entries=[]; lib.msg='Reading folder…'; lib.dirty=true;
   try{
     let e=await listDir(lib.path[lib.path.length-1]); if(gen!==lib.gen) return;
     if(lib.sort==='latest' && e.length){ lib.msg='Sorting by date…'; lib.dirty=true; e=await sortEntries(e); if(gen!==lib.gen) return; }
-    lib.entries=e; lib.msg=e.length? '' : 'No videos or folders in here.';
+    lib.entries=e; lib.msg=e.length? '' : 'No videos or folders in here.'; restorePage();
   }catch(err){
     if(gen!==lib.gen) return;
     lib.msg=err.name==='NotAllowedError'? 'Access to this folder needs to be confirmed again.\nClick Reconnect next to it on the page.' : 'Couldn\'t read this folder.\n'+(err.message||err);
@@ -929,7 +1184,7 @@ async function openRoot(r){
   }
   lib.path=[r.node]; refreshDir();
 }
-function browserBack(){ if(lib.path.length){ lib.path.pop(); refreshDir(); } else closeBrowser(); }
+function browserBack(){ if(lib.view==='settings'){ lib.view='files'; lib.dirty=true; return; } if(lib.path.length){ lib.path.pop(); refreshDir(); } else closeBrowser(); }
 function turnPage(d){ const p=Math.max(0,Math.min(pageCount()-1,lib.page+d)); if(p!==lib.page){ lib.page=p; lib.dirty=true; queueThumbs(); } }
 function applyFmt(){ const s=slots[lib.target]; s.mode=lib.mode; s.swap=lib.swap; s.applyMode(); }
 function setTarget(i){
@@ -953,8 +1208,13 @@ function browserClick(b){
   switch(b.id){
     case 'close': closeBrowser(); break;
     case 'up': browserBack(); break;
-    case 'home': lib.path=[]; refreshDir(); break;
-    case 'root': openRoot(lib.roots[b.data]); break;
+    case 'home': lib.view='files'; lib.path=[]; refreshDir(); break;
+    case 'settings': lib.view='settings'; break;
+    case 'set': setSetting(b.data,!SETTINGS[b.data].get()); break;
+    case 'layout': applyLayout(b.data); break;
+    case 'fit': fitInView(90); break;
+    case 'psecs': stepPhotoSecs(b.data); break;
+    case 'root': lib.view='files'; openRoot(lib.roots[b.data]); break;
     case 'tile': { const e=pageEntries()[b.data]; if(!e) break;
       if(e.root) openRoot(e.root); else if(e.kind==='dir'){ lib.path.push(e); refreshDir(); } else playFromFolder(e); break; }
     case 'target': setTarget(b.data); break;
@@ -985,6 +1245,12 @@ panel.userData={kind:'panel'}; panel.visible=false; scene.add(panel);
 
 function openBrowser(i){
   const t=slots[i].group.visible? i : (visible()[0]||slots[0]).i;
+  // Each screen has its own place in the browser: leave the last screen's folder with it, and pick up
+  // this screen's where it left off (the top level, the first time).
+  if(lib.owner!==t){
+    if(lib.owner!=null){ const o=slots[lib.owner]; o.bpath=lib.path.slice(); o.bpage=lib.page; }
+    lib.owner=t; lib.path=(slots[t].bpath||[]).slice(); lib.restorePage=slots[t].bpage||0; lib.entries=[];
+  }
   setTarget(t);
   camera.updateMatrixWorld();
   const head=new THREE.Vector3().setFromMatrixPosition(camera.matrixWorld);
@@ -1024,17 +1290,19 @@ function drawPanel(){
   // title bar
   c.fillStyle='#181c2f'; rr(c,0,0,PW,120,36); c.fill(); c.fillRect(0,60,PW,60);
   c.fillStyle=acc; c.fillRect(0,118,PW,4);
-  c.fillStyle='#e9e8f2'; c.font='700 60px '+DISP; c.textAlign='left'; c.textBaseline='middle'; c.fillText('MEDIA',40,64);
-  btn('up','▲  UP',440,24,150,72,{dis:!lib.path.length});
+  const settings=lib.view==='settings';
+  c.fillStyle='#e9e8f2'; c.font='700 60px '+DISP; c.textAlign='left'; c.textBaseline='middle'; c.fillText(settings? 'SETTINGS' : 'MEDIA',40,64);
+  btn('up','▲  UP',440,24,150,72,{dis:settings || !lib.path.length});
   c.fillStyle='#e9e8f2'; c.font='600 34px '+BODY; c.textAlign='left';
-  c.fillText(fitLeft(c,['Places',...lib.path.map(n=>n.name)].join('  ›  '),880),620,62);
-  const noFiles=!lib.entries.some(isPlayable);
+  c.fillText(settings? 'Settings' : fitLeft(c,['Places',...lib.path.map(n=>n.name)].join('  ›  '),880),620,62);
+  const noFiles=settings || !lib.entries.some(isPlayable);
   btn('playall','▶  PLAY ALL',1520,24,200,72,{dis:noFiles});
   btn('shuffleall','⤮  SHUFFLE',1730,24,200,72,{dis:noFiles});
   btn('close','✕',1940,24,84,72);
 
   // sidebar
-  btn('home','⌂  Places',40,146,364,70,{on:!lib.path.length,left:true,font:'600 32px '+BODY});
+  btn('home','⌂  Places',40,146,177,70,{on:!settings && !lib.path.length,left:true,font:'600 30px '+BODY});
+  btn('settings','⚙  Settings',227,146,177,70,{on:settings,left:true,font:'600 30px '+BODY});
   lib.roots.slice(0,5).forEach((r,i)=>
     btn('root',(r.perm!=='granted'&&!r.temp? '⚠ ':'')+r.name,40,226+i*80,364,70,{data:i,on:lib.path[0]===r.node,left:true,font:'600 30px '+BODY}));
   label('LOAD TO SCREEN',40,680);
@@ -1047,8 +1315,9 @@ function drawPanel(){
   [['stop','STOP'],['next','NEXT'],['shuffle','SHUFFLE']].forEach(([m,t],k)=>
     btn('end',t,40+k*125,1058,114,72,{data:m,on:slots[lib.target].endMode===m}));
 
-  // grid
+  // grid (or the settings)
   const GX=440, GY=140, TW=378, TH=292, GAP=24;
+  if(settings){ drawSettings(c,btn,acc); panelTex.needsUpdate=true; lib.dirty=false; return; }
   const list=pageEntries();
   if(!list.length && lib.msg){
     c.fillStyle='#9a9eb9'; c.font='500 36px '+BODY; c.textAlign='center'; c.textBaseline='middle';
@@ -1105,9 +1374,50 @@ function drawPanel(){
   panelTex.needsUpdate=true; lib.dirty=false;
 }
 
+// The Settings page of the VR media browser: two columns of large rows, easy to hit with the head
+// cursor. A whole row toggles its setting; rows with buttons act through the buttons.
+function drawSettings(c,btn,acc){
+  const COLS=[{x:440,title:'VIEW'},{x:1250,title:'CONTROLS'}], CW=774, RH=104, GAP=14, Y0=196;
+  const row=(col,i,label,hint)=>{
+    const x=COLS[col].x, y=Y0+i*(RH+GAP);
+    c.fillStyle='#1a1e33'; rr(c,x,y,CW,RH,18); c.fill();
+    c.textAlign='left'; c.textBaseline='middle';
+    c.fillStyle='#e9e8f2'; c.font='600 34px '+BODY; c.fillText(label,x+28,hint? y+38 : y+RH/2);
+    if(hint){ c.fillStyle='#9a9eb9'; c.font='500 24px '+BODY; c.fillText(hint,x+28,y+76); }
+    return {x,y};
+  };
+  const toggle=(col,i,k)=>{
+    const st=SETTINGS[k], on=st.get(), key='set:'+k, hov=lib.hover===key;
+    const {x,y}=row(col,i,st.label,st.hint);
+    if(hov){ c.strokeStyle=acc; c.lineWidth=5; rr(c,x+2,y+2,CW-4,RH-4,16); c.stroke(); }
+    c.fillStyle=on? acc : '#262b45'; rr(c,x+CW-178,y+20,150,64,32); c.fill();
+    c.fillStyle=on? '#10121f' : '#9a9eb9'; c.font='700 32px '+DISP; c.textAlign='center'; c.fillText(on? 'ON' : 'OFF',x+CW-103,y+54);
+    lib.rects.push({x,y,w:CW,h:RH,id:'set',data:k,key});
+  };
+  c.fillStyle='#9a9eb9'; c.font='600 26px '+BODY; c.textAlign='left'; c.textBaseline='middle';
+  for(const col of COLS) c.fillText(col.title,col.x+4,166);
+  // VIEW
+  { const {x,y}=row(0,0,'Layout');
+    [['1','1'],['2','2'],['3arc','3 wide'],['4grid','4 grid'],['4arc','4 wide']].reduce((bx,[l,t])=>{
+      const w=t.length>1? 118 : 70; btn('layout',t,bx,y+18,w,68,{data:l,on:layout===l}); return bx+w+10; }, x+CW-28-(70*2+118*3+40)); }
+  toggle(0,1,'curved');
+  toggle(0,2,'focus');
+  { const {x,y}=row(0,3,'Fit all in view','90° across, nothing over 20° above your eyes'); btn('fit','FIT',x+CW-178,y+20,150,64); }
+  toggle(0,4,'linkSize');
+  // CONTROLS
+  toggle(1,0,'headCursor');
+  toggle(1,1,'autoHide');
+  toggle(1,2,'cropBtn');
+  toggle(1,3,'autoCrop');
+  { const {x,y}=row(1,4,'Each photo shows for','In slideshows, on every screen');
+    btn('psecs','−',x+CW-318,y+20,80,64,{data:-1});
+    c.fillStyle='#e9e8f2'; c.font='700 34px '+DISP; c.textAlign='center'; c.fillText(photoSecs+' s',x+CW-193,y+54);
+    btn('psecs','+',x+CW-148,y+20,80,64,{data:1}); }
+  c.fillStyle='#9a9eb9'; c.font='500 24px '+BODY; c.textAlign='left';
+  c.fillText('VR render resolution is on the page; it takes effect the next time you press Enter VR.',440,Y0+5*(RH+GAP)+30);
+}
 // ---------- head cursor ----------
 let headCursor=true, gazeHit=null, gazeSlot=null;
-const hcEl=document.getElementById('headCursor'); hcEl.onchange=()=>headCursor=hcEl.checked;
 const gazeRC=new THREE.Raycaster();
 const reticle=new THREE.Group();
 const retMat=new THREE.MeshBasicMaterial({color:0xffffff,depthTest:false,transparent:true});
@@ -1132,9 +1442,10 @@ function updateGaze(){
   reticle.quaternion.setFromRotationMatrix(tmpM.extractRotation(camera.matrixWorld));
   reticle.scale.setScalar(d*(live? 1.35 : 1));
   retMat.color.set(live? (lib.open? SLOT_COLORS_DARK[lib.target] : gazeHit.slot? gazeHit.slot.color : '#ffffff') : '#c9cce0');
-  const key=gazeHit? gazeHit.kind+':'+(gazeHit.slot? gazeHit.slot.i : '') : 'none', now=performance.now();
+  const gk=gazeHit && gazeHit.kind==='bar' && gazeHit.slot.barMat.opacity<0.6? 'screen' : gazeHit && gazeHit.kind; // hidden bar = picture
+  const key=gazeHit? gk+':'+(gazeHit.slot? gazeHit.slot.i : '') : 'none', now=performance.now();
   if(key!==gazeKey){ gazeKey=key; gazeSince=now; }
-  const hide=!!(gazeHit && gazeHit.kind==='screen' && now-gazeSince>CURSOR_HIDE_MS);
+  const hide=!!(gazeHit && gk==='screen' && now-gazeSince>CURSOR_HIDE_MS);
   retAlpha+=((hide? 0 : 1)-retAlpha)*(hide? 0.08 : 0.35); // fade out gently, come back quickly
   retMat.opacity=retAlpha; retOuter.material.opacity=0.55*retAlpha;
   reticle.visible=retAlpha>0.02; // A still clicks while it's hidden
@@ -1179,6 +1490,8 @@ vrBtn.onclick=async()=>{
     catch(e){ s=await navigator.xr.requestSession('immersive-vr'); floor=false; }
     renderer.xr.setReferenceSpaceType(floor?'local-floor':'local');
     world.position.y = floor? 0 : -1.6;
+    xrScaleUsed=+document.getElementById('xrScale').value;
+    renderer.xr.setFramebufferScaleFactor(xrScaleUsed); // only takes effect when a session starts
     await renderer.xr.setSession(s);
     session=s; vrBtn.textContent='Exit VR'; setStatus(''); measureEyeAt=performance.now()+1500;
     s.addEventListener('end',()=>{ session=null; vrBtn.textContent='Enter VR'; world.position.y=0;
@@ -1216,7 +1529,7 @@ function pollPad(now){
   const cur=gp.buttons.map(b=>b.pressed || b.value>0.5);
   const ax=gp.axes||[];
   // virtual buttons for sticks
-  cur[100]=ax[0]<-0.6; cur[101]=ax[0]>0.6; cur[102]=ax[3]<-0.6; cur[103]=ax[3]>0.6;
+  cur[100]=ax[0]<-0.6; cur[101]=ax[0]>0.6; cur[102]=ax[3]<-0.6; cur[103]=ax[3]>0.6; cur[104]=ax[2]<-0.6; cur[105]=ax[2]>0.6;
   const down=i=>cur[i] && !padPrev[i];
   const hold=(i,delay,rate)=>{
     if(!cur[i]) return false;
@@ -1227,8 +1540,8 @@ function pollPad(now){
   let acted=false; const act=f=>{ f(); acted=true; };
   const g=gazeHit;
   if(down(8)) act(()=> lib.open? closeBrowser() : openBrowser(selected));
-  if(down(10)) act(()=>{ autoHide=!autoHide; document.getElementById('autoHide').checked=autoHide; });
-  if(down(11)) act(()=>{ headCursor=!headCursor; hcEl.checked=headCursor; });
+  if(down(10)) act(()=>setSetting('autoHide',!autoHide));
+  if(down(11)) act(()=>setSetting('headCursor',!headCursor));
   if(down(9)) act(()=>{ const v=visible().filter(x=>x.loaded); const anyPlaying=v.some(x=>!x.isPaused()); v.forEach(x=> anyPlaying? x.pause() : x.play()); v.forEach(x=>x.lastHover=now); });
   if(lib.open){
     if(down(0) && g && g.kind==='panel' && g.btn) browserClick(g.btn);
@@ -1237,8 +1550,9 @@ function pollPad(now){
     if(hold(5,400,250)||hold(15,400,250)||hold(13,400,250)) turnPage(1);
     padPrev=cur; return;
   }
-  if(down(14)) act(()=>cycle(-1));
-  if(down(15)) act(()=>cycle(1));
+  // D-pad left/right: previous / next video (or photo, or scene). Screens are picked by looking at them.
+  if(down(14)) act(()=>slots[selected].next(-1));
+  if(down(15)) act(()=>slots[selected].next(1));
   const s=slots[selected];
   if(down(0)) act(()=>{ if(!g) s.toggle(); else if(g.btn || g.kind==='screen') activate(g); });
   if(down(1)) act(()=>s.action('mute'));
@@ -1254,12 +1568,43 @@ function pollPad(now){
   if(hold(13,300,120)) act(()=>s.vol(-0.05));
   if(hold(102,200,120)) act(()=>s.resize(1.05));
   if(hold(103,200,120)) act(()=>s.resize(1/1.05));
+  if(hold(105,250,90)) act(()=>s.cropSides(0.01));  // right stick right: crop the sides in
+  if(hold(104,250,90)) act(()=>s.cropSides(-0.01)); // right stick left: back out
   if(acted){ slots[selected].lastHover=now; slots[selected].barDirty=true; padEl.textContent='Controller connected. Screen '+(selected+1)+' is selected.'; }
   padPrev=cur;
 }
 
 // ---------- loop ----------
 const tmpDir=new THREE.Vector3();
+// ---------- settings ----------
+// One place for every on/off setting, so the page's checkboxes and the Settings page in the VR media
+// browser always agree. Defined last, once every variable here exists.
+const SETTINGS = {
+  curved:     {el:'curveOn',    label:'Curved screens',              hint:'Screens wrap around you, so the edges don\'t stretch',
+               get:()=>curved,       set:v=>{ curved=v; slots.forEach(s=>s.updateSize()); }},
+  focus:      {el:'focusOn',    label:'Focus zoom',                  hint:'The screen you look at comes closer',
+               get:()=>focusOn,      set:v=>{ focusOn=v; }},
+  linkSize:   {el:'linkSize',   label:'Same size for all screens',   hint:'Resizing one resizes them all',
+               get:()=>linkSize,     set:v=>{ linkSize=v; if(v) sizeTo(slots[selected],slots[selected].scale); }},
+  headCursor: {el:'headCursor', label:'Head cursor',                 hint:'Look at a button and press A',
+               get:()=>headCursor,   set:v=>{ headCursor=v; }},
+  autoHide:   {el:'autoHide',   label:'Hide control bars',           hint:'Until you look at a screen\'s bar',
+               get:()=>autoHide,     set:v=>{ autoHide=v; slots.forEach(s=>s.updateSize()); }},
+  cropBtn:    {el:'cropBtn',    label:'CROP button on screen bars',  hint:'Cut away empty borders',
+               get:()=>showCropBtn,  set:v=>{ showCropBtn=v; layoutBarButtons(); slots.forEach(s=>s.barDirty=true); }},
+  autoCrop:   {el:'autoCropAll',label:'Auto-crop every video',       hint:'And every photo, as it loads',
+               get:()=>autoCropAll,  set:v=>{ autoCropAll=v; if(v) visible().forEach(s=>{ if(s.loaded && !s.isCropped()) s.autoCrop(true); }); }},
+};
+function setSetting(k,v){
+  SETTINGS[k].set(v);
+  const e=document.getElementById(SETTINGS[k].el); if(e) e.checked=v;
+  lib.dirty=true;
+}
+for(const k in SETTINGS){
+  const e=document.getElementById(SETTINGS[k].el);
+  if(e){ e.checked=SETTINGS[k].get(); e.onchange=()=>setSetting(k,e.checked); }
+}
+
 renderer.setAnimationLoop(()=>{
   const now=performance.now();
   const hovered=new Map(); // slot -> hit
@@ -1267,6 +1612,7 @@ renderer.setAnimationLoop(()=>{
   if(swapFrom && (now>swapUntil || !swapFrom.group.visible)) endSwap();
   if(needArrange) arrange();
   updateGaze();
+  updateFocus(now);
   pollPad(now);
 
   if(renderer.xr.isPresenting){
@@ -1310,8 +1656,9 @@ renderer.setAnimationLoop(()=>{
     const nb = h&&h.kind==='bar'&&h.btn? (h.btn.id==='seek'? null : h.btn.id) : null;
     const ns = h&&h.kind==='bar'&&h.btn&&h.btn.id==='seek'? h.btn.frac : null;
     if(nb!==s.hoverBtn || ns!==s.hoverSeek){ s.hoverBtn=nb; s.hoverSeek=ns; s.barDirty=true; }
+    if(h && h.kind==='bar') s.lastBarLook=now; // focus zoom holds while you use the bar
     if(h && !(h.gaze && h.kind==='screen')) s.lastHover=now; // just looking at a screen shouldn't pop its bar up
-    if(s.barDirty || (!s.isPaused() && now-s.lastDraw>250)) s.drawBar();
+    if(s.barDirty || (!s.isPaused() && now-s.lastDraw>250) || (s.flashUntil && now>s.flashUntil)) s.drawBar();
     if(swapFrom) s.frame.visible = s===swapFrom? now%700<450 : padActive && s.i===selected;
     const show = !renderer.xr.isPresenting || !autoHide || now-s.lastHover<2500 || !s.loaded || !!swapFrom;
     s.barMat.opacity += ((show?1:0) - s.barMat.opacity)*0.15;
