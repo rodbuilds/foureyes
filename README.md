@@ -9,8 +9,9 @@ nothing to install and no account, and your files never leave your computer.
 
 ## Features
 
-- **Up to four screens.** Layouts for 1 screen, 2 side by side, a 2×2 grid, or 4 in a wide
-  arc. Screens space themselves so they never overlap, whatever their size or shape.
+- **Up to four screens.** Layouts for 1 screen, 2 side by side, 3 or 4 in a wide arc, or a
+  2×2 grid. The arcs give tall videos full height, and screens space themselves so they never
+  overlap, whatever their size or shape.
 - **Independent controls per screen.** Play, pause, seek, skip, volume, mute, solo (hear one
   screen only), loop, playback speed and size, from a control bar under each screen.
 - **Media browser in VR.** Browse your video and photo folders from inside the headset, with
@@ -46,7 +47,7 @@ nothing to install and no account, and your files never leave your computer.
 2. Under **Media library**, click **Add video folder…** and choose the folders your videos and
    photos are in. You only do this once, because the browser remembers them. After a browser
    restart you may need to click **Reconnect** once.
-3. Pick a layout at the top (1 screen, 2 screens, 4 grid, 4 wide).
+3. Pick a layout at the top (1 screen, 2 screens, 3 wide, 4 grid, 4 wide).
 4. Click once anywhere on the page so the browser has focus (it won't receive controller
    input otherwise), then press **Enter VR**.
 5. In VR, press **View** on the Xbox controller (or **FILES** on a screen's control bar) to

@@ -96,6 +96,7 @@ button:disabled{opacity:.5;cursor:not-allowed}
     <div class="seg" role="group" aria-label="Screen layout" id="layoutSeg">
       <button data-l="1">1 screen</button>
       <button data-l="2" aria-pressed="true">2 screens</button>
+      <button data-l="3arc">3 wide</button>
       <button data-l="4grid">4 grid</button>
       <button data-l="4arc">4 wide</button>
     </div>
@@ -174,6 +175,7 @@ const LAYOUTS = {
   '1':    {rows:[[0]],       w:2.8,  y:1.6},
   '2':    {rows:[[0,1]],     w:2.0,  y:1.6},
   '4grid':{rows:[[0,1],[2,3]],w:1.5, y:1.65},
+  '3arc': {rows:[[0,1,2]],   w:1.6,  h:1.9, y:1.5}, // fewer, larger screens; less head turning than 4 wide
   '4arc': {rows:[[0,1,2,3]], w:1.35, h:1.9, y:1.5} // tall box: slim portrait videos get full height
 };
 let layout = '2';
