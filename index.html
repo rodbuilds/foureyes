@@ -276,23 +276,26 @@ function bendScreen(mesh,w,on){
   p.needsUpdate=true; g.computeBoundingSphere(); g.computeBoundingBox(); // raycasting relies on these
 }
 
-// control bar geometry (canvas pixels, 1400x128)
-const BW=1500, BH=128;
-const SEEK = {x0:470, x1:850};
+// control bar: two rows on a 1200x208 canvas.
+// Top row: buttons, in groups (files | playback | sound | size, loop, swap).
+// Bottom row: seek slider, then the time (or photo count), then the file name.
+const BW=1200, BH=208, ROW2=112; // ROW2: where the bottom row starts
+const SEEK = {x0:20, x1:600};
 const BUTTONS = [
   {id:'open', x:10,  w:92, label:'FILES'},
-  {id:'back', x:105, w:80, label:'−10'},
-  {id:'play', x:190, w:90, label:'▶'},
-  {id:'fwd',  x:285, w:80, label:'+10'},
-  {id:'next', x:370, w:84, label:'NEXT'},
-  {id:'mute', x:865, w:80, label:'MUTE'},
-  {id:'vdn',  x:950, w:60, label:'V−'},
-  {id:'vup',  x:1015,w:60, label:'V+'},
-  {id:'solo', x:1080,w:75, label:'SOLO'},
-  {id:'sdn',  x:1165,w:60, label:'S−'},
-  {id:'sup',  x:1230,w:60, label:'S+'},
-  {id:'loop', x:1295,w:68, label:'LOOP'},
-  {id:'swap', x:1368,w:84, label:'SWAP'}
+  {id:'prev', x:122, w:84, label:'PREV'},
+  {id:'back', x:211, w:80, label:'−10'},
+  {id:'play', x:296, w:90, label:'▶'},
+  {id:'fwd',  x:391, w:80, label:'+10'},
+  {id:'next', x:476, w:84, label:'NEXT'},
+  {id:'mute', x:580, w:80, label:'MUTE'},
+  {id:'vdn',  x:665, w:60, label:'V−'},
+  {id:'vup',  x:730, w:60, label:'V+'},
+  {id:'solo', x:795, w:75, label:'SOLO'},
+  {id:'sdn',  x:890, w:60, label:'S−'},
+  {id:'sup',  x:955, w:60, label:'S+'},
+  {id:'loop', x:1020,w:72, label:'LOOP'},
+  {id:'swap', x:1097,w:88, label:'SWAP'}
 ];
 // videos are kept in the page (tiny and invisible) rather than detached; Chrome is more willing
 // to throttle or suspend decoding of media elements that aren't in the document
@@ -497,13 +500,14 @@ class Slot{
     if(this.photo){ this.slidePlaying=true; this.slideNext=performance.now()+photoSecs*1000; this.barDirty=true; this.syncUI(); return; }
     this.video.play().catch(()=>setStatus('The browser blocked playback. Press play once on the page, then it will work in VR too.')); }
   seek(t){ if(!this.loaded || this.photo) return; const d=this.video.duration||0; this.video.currentTime=Math.max(0,Math.min(d-0.1,t)); this.barDirty=true; }
-  vol(dv){ if(this.photo){ stepPhotoSecs(dv>0?1:-1); return; } const v=this.video; v.volume=Math.max(0,Math.min(1,+(v.volume+dv).toFixed(2))); if(v.volume>0) v.muted=false; }
+  vol(dv){ if(this.photo){ stepPhotoSecs(dv>0?1:-1); return; } const v=this.video; v.volume=Math.max(0,Math.min(1,+(v.volume+dv).toFixed(2))); if(v.volume>0) v.muted=false; this.flashMsg('Volume '+Math.round(v.volume*100)+'%'); }
   solo(){ slots.forEach(s=>s.video.muted = s!==this); }
   resize(f){ sizeTo(this,this.scale*f); }
   action(id,frac){
     const v=this.video;
     switch(id){
       case 'open': openBrowser(this.i); break;
+      case 'prev': this.next(-1); break;
       case 'next': this.next(1); break;
       case 'swap': if(!swapFrom) startSwap(this); else if(swapFrom===this) endSwap(); else swapScreens(swapFrom,this); break;
       case 'play': this.toggle(); break;
@@ -521,10 +525,12 @@ class Slot{
     this.barDirty=true;
   }
   hitBar(uv){
-    const x=uv.x*BW;
-    if(x>=SEEK.x0 && x<=SEEK.x1) return {id:'seek', frac:(x-SEEK.x0)/(SEEK.x1-SEEK.x0)};
+    const x=uv.x*BW, y=(1-uv.y)*BH;
+    if(y>=ROW2) return x>=SEEK.x0 && x<=SEEK.x1? {id:'seek', frac:Math.max(0,Math.min(1,(x-SEEK.x0-10)/(SEEK.x1-SEEK.x0-20)))} : null;
     const b=BUTTONS.find(b=>x>=b.x && x<=b.x+b.w); return b?{id:b.id}:null;
   }
+  // a short message in the bar's name area, e.g. after changing the volume
+  flashMsg(t){ this.flash=t; this.flashUntil=performance.now()+1500; this.barDirty=true; }
   drawBar(){
     const c=this.barCanvas.getContext('2d'), v=this.video;
     c.clearRect(0,0,BW,BH);
@@ -534,31 +540,41 @@ class Slot{
     for(const b of BUTTONS){
       let on = (b.id==='mute'&&v.muted)||(b.id==='loop'&&v.loop)||(b.id==='solo'&&!v.muted&&slots.every(s=>s===this||s.video.muted))||(b.id==='swap'&&swapFrom===this);
       const here = b.id==='swap' && swapFrom && swapFrom!==this; // the other screens offer themselves as the swap target
-      c.globalAlpha = b.id==='next' && !(this.list&&this.list.length>1)? 0.4 : 1;
+      c.globalAlpha = (b.id==='next'||b.id==='prev') && !(this.list&&this.list.length>1)? 0.4 : 1;
       c.fillStyle = here? swapFrom.color : on? this.color : (this.hoverBtn===b.id? '#454b72':'#262b45');
-      rr(c,b.x+4,20,b.w-8,88,16); c.fill();
+      rr(c,b.x+4,16,b.w-8,88,16); c.fill();
       c.fillStyle= on||here? '#10121f':'#e9e8f2';
       let label=b.label; if(b.id==='play') label = this.isPaused()? '▶':'❚❚'; if(here) label='HERE';
       if(this.photo && b.id==='vdn') label='T−'; if(this.photo && b.id==='vup') label='T+'; // photo timer
       c.font = (b.id==='play'?'700 44px':'700 30px')+' "Barlow Condensed", Arial Narrow, sans-serif';
-      c.fillText(label,b.x+b.w/2,65);
+      c.fillText(label,b.x+b.w/2,61);
       c.globalAlpha=1;
     }
-    // seek
+    // bottom row: seek slider
     const d=v.duration||0, t=v.currentTime||0, f=this.photo? this.photoFrac() : d? t/d:0;
-    const ty=84, tx0=SEEK.x0+10, tx1=SEEK.x1-10;
-    c.fillStyle='#343a5a'; rr(c,tx0,ty-6,tx1-tx0,12,6); c.fill();
-    c.fillStyle=this.color; rr(c,tx0,ty-6,Math.max(12,(tx1-tx0)*f),12,6); c.fill();
-    c.beginPath(); c.arc(tx0+(tx1-tx0)*f,ty,13,0,Math.PI*2); c.fill();
-    if(this.hoverSeek!=null){ c.fillStyle='#fff'; c.fillRect(tx0+(tx1-tx0)*this.hoverSeek-2,ty-18,4,36); }
-    c.textAlign='left'; c.fillStyle='#e9e8f2'; c.font='600 28px Barlow, Arial, sans-serif';
-    let top = this.loaded ? fmt(this.hoverSeek!=null&&d? this.hoverSeek*d : t)+' / '+fmt(d) : 'Screen '+(this.i+1)+': no video';
-    if(this.photo) top='Photo '+(this.pos+1)+' / '+(this.list? this.list.length : 1);
-    c.fillText(top,tx0,40);
-    c.textAlign='right'; c.fillStyle='#9a9eb9'; c.font='500 24px Barlow, Arial, sans-serif';
-    const pl=this.list&&this.list.length>1? (this.pos+1)+'/'+this.list.length+(this.endMode==='shuffle'?' shuffle':this.endMode==='next'?' next':'')+'  ' : '';
-    c.fillText(pxOn && pxPerDeg && this.loaded? this.sharpText()
-      : this.photo? pl+photoSecs+'s each' : pl+'vol '+Math.round(v.volume*100)+(v.playbackRate!==1?'  ×'+v.playbackRate:''),tx1,40);
+    const ty=ROW2+48, tx0=SEEK.x0+10, tx1=SEEK.x1-10;
+    c.fillStyle='#343a5a'; rr(c,tx0,ty-7,tx1-tx0,14,7); c.fill();
+    c.fillStyle=this.color; rr(c,tx0,ty-7,Math.max(14,(tx1-tx0)*f),14,7); c.fill();
+    c.beginPath(); c.arc(tx0+(tx1-tx0)*f,ty,15,0,Math.PI*2); c.fill();
+    if(this.hoverSeek!=null){ c.fillStyle='#fff'; c.fillRect(tx0+(tx1-tx0)*this.hoverSeek-2,ty-22,4,44); }
+    // ...then the time (or photo count)...
+    let count = this.loaded ? fmt(this.hoverSeek!=null&&d? this.hoverSeek*d : t)+' / '+fmt(d) : 'No video';
+    if(this.photo) count='Photo '+(this.pos+1)+' / '+(this.list? this.list.length : 1);
+    c.textAlign='left'; c.fillStyle='#e9e8f2'; c.font='600 30px Barlow, Arial, sans-serif';
+    const cx=SEEK.x1+20; c.fillText(count,cx,ty+1);
+    // ...then the file name, cut short to fit. A recent change (volume, photo time) shows here briefly,
+    // and "Show sharpness" takes the spot while it's on.
+    const nx=cx+c.measureText(count).width+28, nw=BW-12-nx;
+    if(this.flashUntil && performance.now()>this.flashUntil) this.flashUntil=0;
+    let info, col='#9a9eb9';
+    if(this.flashUntil){ info=this.flash; col=this.color; }
+    else if(pxOn && pxPerDeg && this.loaded) info=this.sharpText();
+    else {
+      const pl=this.list&&this.list.length>1? (this.pos+1)+'/'+this.list.length+(this.endMode==='shuffle'?' shuffled':'')+'  ·  ' : '';
+      info=this.name? pl+this.name.replace(/\.[^.]+$/,'') : 'Screen '+(this.i+1);
+    }
+    c.fillStyle=col; c.font='500 26px Barlow, Arial, sans-serif';
+    if(nw>40) c.fillText(fit(c,info,nw),nx,ty+1);
     this.barTex.needsUpdate=true; this.barDirty=false; this.lastDraw=performance.now();
   }
   // ----- desktop card -----
@@ -781,7 +797,7 @@ function stepPhotoSecs(d){
 function setPhotoSecs(v){
   photoSecs=v; photoSel.value=String(v);
   const now=performance.now();
-  for(const s of slots) if(s.photo){ if(s.slidePlaying) s.slideNext=now+v*1000; s.barDirty=true; } // restart the current photo's timer
+  for(const s of slots) if(s.photo){ if(s.slidePlaying) s.slideNext=now+v*1000; s.flashMsg('Each photo: '+v+' s'); } // restart the current photo's timer
 }
 const photoSel=document.getElementById('photoSecs');
 photoSel.innerHTML=PHOTO_STEPS.map(v=>`<option value="${v}">${v<60? v+' seconds' : (v/60)+(v===60?' minute':' minutes')}</option>`).join('');
@@ -1431,7 +1447,7 @@ renderer.setAnimationLoop(()=>{
     const ns = h&&h.kind==='bar'&&h.btn&&h.btn.id==='seek'? h.btn.frac : null;
     if(nb!==s.hoverBtn || ns!==s.hoverSeek){ s.hoverBtn=nb; s.hoverSeek=ns; s.barDirty=true; }
     if(h && !(h.gaze && h.kind==='screen')) s.lastHover=now; // just looking at a screen shouldn't pop its bar up
-    if(s.barDirty || (!s.isPaused() && now-s.lastDraw>250)) s.drawBar();
+    if(s.barDirty || (!s.isPaused() && now-s.lastDraw>250) || (s.flashUntil && now>s.flashUntil)) s.drawBar();
     if(swapFrom) s.frame.visible = s===swapFrom? now%700<450 : padActive && s.i===selected;
     const show = !renderer.xr.isPresenting || !autoHide || now-s.lastHover<2500 || !s.loaded || !!swapFrom;
     s.barMat.opacity += ((show?1:0) - s.barMat.opacity)*0.15;
