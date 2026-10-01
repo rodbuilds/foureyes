@@ -191,6 +191,8 @@ const LAYOUTS = {
 };
 let layout = '2';
 let linkSize = false, needArrange = true;
+const NO_CROP = {l:0,r:0,t:0,b:0}; // defined up here because every screen starts with it when it's created
+let autoCropAll = false; // crop borders automatically on every new video and photo
 // ---- experiments (branch experiment/curved-screens) ----
 let curved = false;      // screens bend onto the cylinder of radius R around you
 let focusOn = false;     // the screen you look at slides toward you
@@ -814,8 +816,6 @@ function measurePx(){
   if(Math.abs(p-pxPerDeg)>0.5){ pxPerDeg=p; if(pxOn) slots.forEach(s=>s.barDirty=true); }
 }
 // ---- crop ----
-const NO_CROP={l:0,r:0,t:0,b:0};
-let autoCropAll=false;
 document.getElementById('autoCropAll').onchange=e=>{ autoCropAll=e.target.checked; if(autoCropAll) visible().forEach(s=>{ if(s.loaded && !s.isCropped()) s.autoCrop(true); }); };
 // Find plain borders in one frame: shrink it to 160x90, then walk in from each edge while the whole
 // column (or row) is a flat near-black or near-white. eye = the part of the frame to look at, as
