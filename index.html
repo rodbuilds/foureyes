@@ -124,7 +124,7 @@ button:disabled{opacity:.5;cursor:not-allowed}
     <label><input type="checkbox" id="curveOn" checked> Curved screens</label>
     <label><input type="checkbox" id="focusOn"> Focus zoom (the screen you look at comes closer)</label>
     <label><input type="checkbox" id="linkSize"> Same size for all screens</label>
-    <label><input type="checkbox" id="autoHide" checked> Hide control bars in VR (they appear over the bottom of the picture when you look there)</label>
+    <label><input type="checkbox" id="autoHide" checked> Hide control bars in VR until you look at a screen</label>
     <label><input type="checkbox" id="headCursor" checked> Head cursor (look at something, press A to click it)</label>
     <label><input type="checkbox" id="cropBtn"> CROP button on screen bars</label>
     <label><input type="checkbox" id="autoCropAll"> Auto-crop borders on every video and photo</label>
@@ -399,11 +399,9 @@ class Slot{
     for(const m of [this.mono,this.left,this.right]){ m.scale.set(w,h,1); bendScreen(m,w,curved); }
     this.frame.scale.set(w+0.07,h+0.07,1); bendScreen(this.frame,w+0.07,curved);
     const bw=Math.max(w,1.2), bh=bw*(BH/BW); this.bar.scale.set(bw,bw,1); bendScreen(this.bar,bw,curved);
-    // When bars auto-hide they sit over the bottom of the picture (like a TV's on-screen controls) and
-    // take no room in the layout; otherwise they hang below the screen.
-    this.bar.position.y = autoHide? -h/2+bh/2 : -h/2-0.03-bh/2;
+    this.bar.position.y = -h/2-0.03-bh/2; // below the picture, never over it
     // w: widest part (screen or bar); sw: the framed screen; bw: the bar (always flat); vw: the picture alone
-    this.dims={w:Math.max(w+0.07,bw), sw:w+0.07, bw, vw:w, h:h+0.07, bar:autoHide? 0 : 0.03+bh};
+    this.dims={w:Math.max(w+0.07,bw), sw:w+0.07, bw, vw:w, h:h+0.07, bar:0.03+bh};
     needArrange=true;
   }
   place(on,baseW,baseH){
@@ -733,7 +731,13 @@ slots.forEach(s=>s.syncUI());
 // A flat screen facing you at distance R covers an angle of 2*atan(w/2R); a curved one lies on the
 // cylinder of radius R, so it covers exactly w/R. The bar under it stays flat either way.
 const H_GAP=0.1, V_GAP=0.1, MIN_BOTTOM=0.2;
-function screenAngle(d){ return curved? Math.max(d.sw/R, 2*Math.atan(d.bw/(2*R))) : 2*Math.atan(d.w/(2*R)); }
+// Screens are spaced by their pictures when bars auto-hide: a bar (at least 1.2 m wide, so its buttons
+// stay usable) only shows while you look at it, so it may reach under a neighbour. With bars always
+// showing, the spacing keeps room for them.
+function screenAngle(d){
+  if(autoHide) return curved? d.sw/R : 2*Math.atan(d.sw/(2*R));
+  return curved? Math.max(d.sw/R, 2*Math.atan(d.bw/(2*R))) : 2*Math.atan(d.w/(2*R));
+}
 // Horizontal and vertical angle (degrees) the whole layout would cover if every screen were k times its size.
 function layoutSpan(k){
   const L=LAYOUTS[layout]; let hMax=0, vTot=0;
@@ -742,7 +746,7 @@ function layoutSpan(k){
     ss.forEach((s,i)=>{
       const vw=s.dims.vw*k, bw=Math.max(vw,1.2);
       a+=screenAngle({w:Math.max(vw+0.07,bw), sw:vw+0.07, bw}) + (i? H_GAP/R : 0);
-      rh=Math.max(rh,(s.dims.h-0.07)*k+0.07); rb=Math.max(rb,autoHide? 0 : 0.03+bw*(BH/BW));
+      rh=Math.max(rh,(s.dims.h-0.07)*k+0.07); rb=Math.max(rb,0.03+bw*(BH/BW));
     });
     hMax=Math.max(hMax,a); vTot+=rh+rb;
   }
@@ -762,6 +766,10 @@ function fitInView(deg){
   const base=vis.map(s=>s.scale);
   const tryK=k=>{ vis.forEach((s,i)=>{ s.scale=Math.max(0.2,Math.min(2.5,base[i]*k)); s.updateSize(); }); arrange();
     return layoutSpan(1).h<=deg && topAngle(vis)<=FIT_UP_DEG; };
+  if(!tryK(0.2/Math.min(...base))){ // even the smallest size doesn't fit: leave the screens as they were
+    vis.forEach((s,i)=>s.setScale(base[i])); arrange();
+    setStatus("These screens cannot be made to fit within "+deg+"°, so their sizes were left alone."); return;
+  }
   let lo=0.05, hi=10;
   for(let i=0;i<30;i++){ const mid=(lo+hi)/2; if(tryK(mid)) lo=mid; else hi=mid; }
   vis.forEach((s,i)=>s.setScale(base[i]*lo)); arrange();
@@ -1578,7 +1586,7 @@ const SETTINGS = {
                get:()=>linkSize,     set:v=>{ linkSize=v; if(v) sizeTo(slots[selected],slots[selected].scale); }},
   headCursor: {el:'headCursor', label:'Head cursor',                 hint:'Look at a button and press A',
                get:()=>headCursor,   set:v=>{ headCursor=v; }},
-  autoHide:   {el:'autoHide',   label:'Hide control bars',           hint:'They appear over the picture when you look at its bottom',
+  autoHide:   {el:'autoHide',   label:'Hide control bars',           hint:'Until you look at a screen\'s bar',
                get:()=>autoHide,     set:v=>{ autoHide=v; slots.forEach(s=>s.updateSize()); }},
   cropBtn:    {el:'cropBtn',    label:'CROP button on screen bars',  hint:'Cut away empty borders',
                get:()=>showCropBtn,  set:v=>{ showCropBtn=v; layoutBarButtons(); slots.forEach(s=>s.barDirty=true); }},
