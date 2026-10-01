@@ -120,6 +120,16 @@ button:disabled{opacity:.5;cursor:not-allowed}
     <label>Each photo shows for <select id="photoSecs" aria-label="Seconds per photo in slideshows"></select></label>
     <label><input type="checkbox" id="headCursor" checked> Head cursor (look at something, press A to click it)</label>
   </div>
+  <div class="global" id="experiments">
+    <strong>Experiments:</strong>
+    <label><input type="checkbox" id="curveOn"> Curved screens</label>
+    <button id="fitView">Fit all in view</button>
+    <select id="fitDeg" aria-label="Fit within"><option value="60">within 60°</option><option value="75" selected>within 75°</option><option value="90">within 90°</option></select>
+    <label><input type="checkbox" id="focusOn"> Focus zoom (the screen you look at comes closer)</label>
+    <label><input type="checkbox" id="mipOn" checked> Smooth downscaling</label>
+    <label>VR render <select id="xrScale" aria-label="VR render resolution"><option value="1">normal</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option></select></label>
+    <label><input type="checkbox" id="pxOn"> Show sharpness</label>
+  </div>
 
   <section class="lib">
     <h2>Media library</h2>
@@ -180,6 +190,14 @@ const LAYOUTS = {
 };
 let layout = '2';
 let linkSize = false, needArrange = true;
+// ---- experiments (branch experiment/curved-screens) ----
+let curved = false;      // screens bend onto the cylinder of radius R around you
+let focusOn = false;     // the screen you look at slides toward you
+const FOCUS_Z = 1.5;     // how much closer (and so how much bigger and sharper) the focused screen gets
+let mipOn = true;        // mipmapped video textures: smooth instead of shimmery when a screen is small
+let pxOn = false;        // show estimated headset pixels per screen on its bar
+let pxPerDeg = 0;        // estimated rendered pixels per degree near the centre of view
+const SCREEN_SEG = 48;   // columns in each screen mesh, so it can bend smoothly
 const PHOTO_STEPS = [1,2,3,4,5,7,10,15,20,30,45,60,120];
 let photoSecs = 5; // how long each photo in a slideshow stays up, shared by every screen
 const slotAt = [0,1,2,3]; // layout position -> slot index; swapping screens swaps entries here
@@ -238,11 +256,24 @@ function updateMouse(e){
 // ---------- helpers ----------
 const fmt = s => { if(!isFinite(s)) return '0:00'; s=Math.max(0,Math.floor(s)); const h=Math.floor(s/3600), m=Math.floor(s%3600/60), x=s%60;
   return (h? h+':'+String(m).padStart(2,'0') : m)+':'+String(x).padStart(2,'0'); };
-const BASE_UV = [0,1, 1,1, 0,0, 1,0];
+// map a screen mesh onto part of its texture (one eye's half of a 3D frame), for any number of vertices
 function setUV(geo,u0,u1,v0,v1){
-  const uv = geo.attributes.uv;
-  for(let i=0;i<4;i++) uv.setXY(i, u0+BASE_UV[i*2]*(u1-u0), v0+BASE_UV[i*2+1]*(v1-v0));
+  const uv = geo.attributes.uv, base = geo.userData.baseUV || (geo.userData.baseUV = uv.array.slice());
+  for(let i=0;i<uv.count;i++) uv.setXY(i, u0+base[i*2]*(u1-u0), v0+base[i*2+1]*(v1-v0));
   uv.needsUpdate = true;
+}
+// Bend a unit-width screen mesh (scaled to world width w) onto the cylinder of radius R centred on you,
+// or flatten it again. Every column then sits the same distance from your eyes. x is in unit space
+// (the mesh is scaled by w), z is in world units (z scale stays 1), so the curve is true at any size.
+function bendScreen(mesh,w,on){
+  const g=mesh.geometry, p=g.attributes.position;
+  const bx=g.userData.baseX || (g.userData.baseX=Array.from({length:p.count},(_,i)=>p.getX(i)));
+  for(let i=0;i<p.count;i++){
+    const x=bx[i];
+    if(on){ const a=x*w/R; p.setXYZ(i, R*Math.sin(a)/w, p.getY(i), R*(1-Math.cos(a))); }
+    else p.setXYZ(i, x, p.getY(i), 0);
+  }
+  p.needsUpdate=true; g.computeBoundingSphere(); g.computeBoundingBox(); // raycasting relies on these
 }
 
 // control bar geometry (canvas pixels, 1400x128)
@@ -292,7 +323,7 @@ class Slot{
     p.fillStyle='#9a9eb9'; p.font='500 26px Barlow, Arial, sans-serif'; p.fillText('Press FILES below or the View button',320,220);
     this.placeTex = new THREE.CanvasTexture(pc);
 
-    const mk = () => new THREE.Mesh(new THREE.PlaneGeometry(1,1), new THREE.MeshBasicMaterial({map:this.placeTex}));
+    const mk = () => new THREE.Mesh(new THREE.PlaneGeometry(1,1,SCREEN_SEG,1), new THREE.MeshBasicMaterial({map:this.placeTex}));
     this.mono=mk(); this.left=mk(); this.right=mk();
     this.left.layers.set(1); this.right.layers.set(2);
     for(const m of [this.mono,this.left,this.right]) m.userData={slot:this,kind:'screen'};
@@ -303,13 +334,14 @@ class Slot{
     this.bar=new THREE.Mesh(new THREE.PlaneGeometry(1,BH/BW), this.barMat);
     this.bar.userData={slot:this,kind:'bar'}; this.bar.position.z=0.01;
 
-    this.frame=new THREE.Mesh(new THREE.PlaneGeometry(1,1), new THREE.MeshBasicMaterial({color:new THREE.Color(this.color)}));
+    this.frame=new THREE.Mesh(new THREE.PlaneGeometry(1,1,SCREEN_SEG,1), new THREE.MeshBasicMaterial({color:new THREE.Color(this.color)}));
+    this.zoom=1; this.basePos=new THREE.Vector3(); // focus zoom moves the screen toward you from basePos
     this.frame.position.z=-0.01; this.frame.visible=false;
     this.group=new THREE.Group(); this.group.add(this.frame,this.mono,this.left,this.right,this.bar); world.add(this.group);
 
     v.addEventListener('loadedmetadata',()=>{
       // plain Texture, not VideoTexture: we upload only when the video has actually moved to a new frame (see the render loop)
-      if(!this.tex){ this.tex=new THREE.Texture(v); this.tex.minFilter=THREE.LinearFilter; this.tex.magFilter=THREE.LinearFilter; this.tex.generateMipmaps=false; }
+      if(!this.tex){ this.tex=new THREE.Texture(v); this.tex.magFilter=THREE.LinearFilter; setVideoFiltering(this.tex); }
       this.lastT=-1;
       for(const m of [this.mono,this.left,this.right]){ m.material.map=this.tex; m.material.needsUpdate=true; }
       this.loaded=true; this.applyMode(); this.err(''); this.syncUI();
@@ -351,18 +383,27 @@ class Slot{
     // is limited by the box height instead of towering over the others
     const bw0=this.baseW*this.scale, bh0=this.baseH*this.scale, a=this.aspect();
     const w=Math.min(bw0,bh0*a), h=w/a;
-    for(const m of [this.mono,this.left,this.right]) m.scale.set(w,h,1);
-    this.frame.scale.set(w+0.07,h+0.07,1);
+    for(const m of [this.mono,this.left,this.right]){ m.scale.set(w,h,1); bendScreen(m,w,curved); }
+    this.frame.scale.set(w+0.07,h+0.07,1); bendScreen(this.frame,w+0.07,curved);
     const bw=Math.max(w,1.2); this.bar.scale.set(bw,bw,1);
     this.bar.position.y = -h/2 - 0.03 - bw*(BH/BW)/2;
-    this.dims={w:Math.max(w+0.07,bw), h:h+0.07, bar:0.03+bw*(BH/BW)};
+    // w: widest part (screen or bar); sw: the framed screen; bw: the bar (always flat); vw: the picture alone
+    this.dims={w:Math.max(w+0.07,bw), sw:w+0.07, bw, vw:w, h:h+0.07, bar:0.03+bw*(BH/BW)};
     needArrange=true;
   }
   place(on,baseW,baseH){
     this.group.visible=on; if(!on) return;
     this.baseW=baseW; this.baseH=baseH; this.updateSize();
   }
-  setScale(v){ this.scale=Math.max(0.4,Math.min(2.5,+v.toFixed(3))); this.updateSize(); this.syncUI(); }
+  // "≈ 610 of 1920 px": roughly how many headset pixels the picture gets across, vs. what one eye's
+  // view of the video holds. The gap between the two is detail you can't see at this size.
+  sharpText(){
+    const d=R/this.zoom, w=this.dims.vw;
+    const deg=(curved? w/d : 2*Math.atan(w/(2*d)))*180/Math.PI;
+    const src=(this.photo? this.mw : this.video.videoWidth)/(this.mode.startsWith('sbs')? 2 : 1);
+    return '≈ '+Math.round(deg*pxPerDeg)+' of '+Math.round(src)+' px  ·  '+deg.toFixed(0)+'°';
+  }
+  setScale(v){ this.scale=Math.max(0.2,Math.min(2.5,+v.toFixed(3))); this.updateSize(); this.syncUI(); }
   // ----- playlist -----
   setList(list,cur){ this.list=list; this.buildOrder(cur); }
   buildOrder(cur){
@@ -516,7 +557,8 @@ class Slot{
     c.fillText(top,tx0,40);
     c.textAlign='right'; c.fillStyle='#9a9eb9'; c.font='500 24px Barlow, Arial, sans-serif';
     const pl=this.list&&this.list.length>1? (this.pos+1)+'/'+this.list.length+(this.endMode==='shuffle'?' shuffle':this.endMode==='next'?' next':'')+'  ' : '';
-    c.fillText(this.photo? pl+photoSecs+'s each' : pl+'vol '+Math.round(v.volume*100)+(v.playbackRate!==1?'  ×'+v.playbackRate:''),tx1,40);
+    c.fillText(pxOn && pxPerDeg && this.loaded? this.sharpText()
+      : this.photo? pl+photoSecs+'s each' : pl+'vol '+Math.round(v.volume*100)+(v.playbackRate!==1?'  ×'+v.playbackRate:''),tx1,40);
     this.barTex.needsUpdate=true; this.barDirty=false; this.lastDraw=performance.now();
   }
   // ----- desktop card -----
@@ -551,7 +593,7 @@ class Slot{
         <button data-a="next">Next video</button>
       </div>
       <div class="row">
-        <span class="lbl">Size</span><input type="range" min="40" max="250" value="100" data-r="size" aria-label="Screen size">
+        <span class="lbl">Size</span><input type="range" min="20" max="250" value="100" data-r="size" aria-label="Screen size">
         <select data-r="swapwith" aria-label="Swap places with another screen"><option value="">Swap places with…</option></select>
       </div>
       <div class="err" data-r="err"></div>`;
@@ -605,8 +647,95 @@ slots.forEach(s=>slotsEl.appendChild(s.buildCard()));
 slots.forEach(s=>s.syncUI());
 
 // Lay screens out edge to edge around you, using each screen's current size, so they can never overlap.
-// Each screen is a flat panel facing you at distance R, so it covers an angle of 2*atan(w/2R).
+// A flat screen facing you at distance R covers an angle of 2*atan(w/2R); a curved one lies on the
+// cylinder of radius R, so it covers exactly w/R. The bar under it stays flat either way.
 const H_GAP=0.1, V_GAP=0.1, MIN_BOTTOM=0.2;
+function screenAngle(d){ return curved? Math.max(d.sw/R, 2*Math.atan(d.bw/(2*R))) : 2*Math.atan(d.w/(2*R)); }
+// Horizontal and vertical angle (degrees) the whole layout would cover if every screen were k times its size.
+function layoutSpan(k){
+  const L=LAYOUTS[layout]; let hMax=0, vTot=0;
+  for(const row of L.rows){
+    const ss=row.map(p=>slots[slotAt[p]]); let a=0, rh=0, rb=0;
+    ss.forEach((s,i)=>{
+      const vw=s.dims.vw*k, bw=Math.max(vw,1.2);
+      a+=screenAngle({w:Math.max(vw+0.07,bw), sw:vw+0.07, bw}) + (i? H_GAP/R : 0);
+      rh=Math.max(rh,(s.dims.h-0.07)*k+0.07); rb=Math.max(rb,0.03+bw*(BH/BW));
+    });
+    hMax=Math.max(hMax,a); vTot+=rh+rb;
+  }
+  vTot+=V_GAP*(L.rows.length-1);
+  return {h:hMax*180/Math.PI, v:2*Math.atan(vTot/(2*R))*180/Math.PI};
+}
+// Scale every visible screen together so the whole layout fits inside deg° across (and 0.8 of that
+// vertically, since headsets see less up-down than side to side). Relative sizes are kept.
+function fitInView(deg){
+  const fits=k=>{ const s=layoutSpan(k); return s.h<=deg && s.v<=deg*0.8; };
+  let lo=0.05, hi=10;
+  for(let i=0;i<40;i++){ const mid=(lo+hi)/2; if(fits(mid)) lo=mid; else hi=mid; }
+  visible().forEach(s=>s.setScale(s.scale*lo));
+  const sp=layoutSpan(1);
+  setStatus(`Fitted: the screens now cover ${sp.h.toFixed(0)}° across and ${sp.v.toFixed(0)}° up and down.`+
+    (pxPerDeg? '' : ' Turn on "Show sharpness" in VR to see what that costs each screen.'));
+}
+// Video textures: with mipmaps, a big video on a small screen is averaged down smoothly instead of
+// skipping pixels, which is what makes small screens shimmer and crawl.
+function setVideoFiltering(t){
+  t.generateMipmaps=mipOn; t.minFilter=mipOn? THREE.LinearMipmapLinearFilter : THREE.LinearFilter;
+  t.anisotropy=mipOn? renderer.capabilities.getMaxAnisotropy() : 1; t.needsUpdate=true;
+}
+// Focus zoom: the screen you've looked at for a moment slides straight toward you, so it covers a
+// bigger angle and gets more of the headset's pixels; the rest stay put. It's chosen by the angle
+// between your gaze and each screen's resting centre (not by raycast), so a zoomed screen can't block
+// you from picking the one beside it.
+const _fo=new THREE.Vector3(), _fv=new THREE.Vector3(), _fp=new THREE.Vector3();
+let focusSlot=null, focusCand=null, focusSince=0;
+function updateFocus(now){
+  let best=null;
+  if(focusOn && !lib.open && (renderer.xr.isPresenting || padActive)){
+    if(!renderer.xr.isPresenting) camera.updateMatrixWorld();
+    _fo.setFromMatrixPosition(camera.matrixWorld);
+    _fv.set(0,0,-1).transformDirection(camera.matrixWorld);
+    world.updateMatrixWorld();
+    let bestA=Infinity;
+    for(const s of visible()){
+      _fp.copy(s.basePos).applyMatrix4(world.matrixWorld).sub(_fo);
+      const d=_fp.length()/(s===focusSlot? s.zoom : 1); // the focused screen counts at its zoomed size, so it doesn't flicker off
+      const half=Math.max(Math.atan2(s.dims.sw/2,d), Math.atan2(s.dims.h/2,d));
+      const a=_fv.angleTo(_fp);
+      if(a<half*1.05 && a<bestA){ bestA=a; best=s; }
+    }
+  }
+  if(best!==focusCand){ focusCand=best; focusSince=now; }
+  if(now-focusSince>350) focusSlot=focusCand; // a short dwell, so glancing across doesn't pop every screen
+  for(const s of visible()){
+    const target= s===focusSlot? FOCUS_Z : 1;
+    if(s.zoom===target) continue;
+    s.zoom+=(target-s.zoom)*0.12; if(Math.abs(target-s.zoom)<0.002) s.zoom=target;
+    const z=s.zoom, b=s.basePos;
+    s.group.position.set(b.x/z, eyeY+(b.y-eyeY)/z, b.z/z); // along the line to your eyes
+    if(pxOn) s.barDirty=true;
+  }
+}
+// Sharpness readout: how many pixels per degree the headset renders near the centre of view (at normal
+// render quality), from the eye's projection and the framebuffer size. An estimate: lenses spread
+// pixels unevenly and headsets render above their panel resolution.
+let xrScaleUsed=1;
+function measurePx(){
+  let p=0;
+  if(renderer.xr.isPresenting){
+    const cam=renderer.xr.getCamera(camera), c0=cam.cameras && cam.cameras[0], ses=renderer.xr.getSession();
+    const bl=ses && ses.renderState.baseLayer; if(!c0 || !bl) return;
+    const P=c0.projectionMatrix.elements, tl=(P[8]-1)/P[0], tr=(P[8]+1)/P[0];
+    if(!(tr>tl)) return;
+    p=(bl.framebufferWidth/cam.cameras.length/xrScaleUsed)/(tr-tl)*Math.PI/180;
+  } else p=(canvas.height/2)/Math.tan(camera.fov*Math.PI/360)*Math.PI/180;
+  if(Math.abs(p-pxPerDeg)>0.5){ pxPerDeg=p; if(pxOn) slots.forEach(s=>s.barDirty=true); }
+}
+document.getElementById('curveOn').onchange=e=>{ curved=e.target.checked; slots.forEach(s=>s.updateSize()); };
+document.getElementById('fitView').onclick=()=>fitInView(+document.getElementById('fitDeg').value);
+document.getElementById('focusOn').onchange=e=>{ focusOn=e.target.checked; };
+document.getElementById('mipOn').onchange=e=>{ mipOn=e.target.checked; slots.forEach(s=>{ if(s.tex) setVideoFiltering(s.tex); }); };
+document.getElementById('pxOn').onchange=e=>{ pxOn=e.target.checked; slots.forEach(s=>s.barDirty=true); };
 function arrange(){
   needArrange=false;
   const L=LAYOUTS[layout], rows=L.rows.map(r=>r.map(p=>slots[slotAt[p]]));
@@ -618,11 +747,12 @@ function arrange(){
   top += Math.max(0, MIN_BOTTOM-(top-total));
   rows.forEach((r,ri)=>{
     const y=top-rowH[ri]/2;
-    const ang=r.map(s=>2*Math.atan(s.dims.w/(2*R))), gap=H_GAP/R;
+    const ang=r.map(s=>screenAngle(s.dims)), gap=H_GAP/R;
     let a=(ang.reduce((x,v)=>x+v,0)+gap*(r.length-1))/2; // leftmost edge (positive yaw is to your left)
     r.forEach((s,k)=>{
       const c=a-ang[k]/2;
-      s.group.position.set(-R*Math.sin(c), y, -R*Math.cos(c));
+      s.basePos.set(-R*Math.sin(c), y, -R*Math.cos(c));
+      s.group.position.copy(s.basePos); s.zoom=1;
       s.group.lookAt(0,y,0);
       a-=ang[k]+gap;
     });
@@ -1165,6 +1295,8 @@ vrBtn.onclick=async()=>{
     catch(e){ s=await navigator.xr.requestSession('immersive-vr'); floor=false; }
     renderer.xr.setReferenceSpaceType(floor?'local-floor':'local');
     world.position.y = floor? 0 : -1.6;
+    xrScaleUsed=+document.getElementById('xrScale').value;
+    renderer.xr.setFramebufferScaleFactor(xrScaleUsed); // only takes effect when a session starts
     await renderer.xr.setSession(s);
     session=s; vrBtn.textContent='Exit VR'; setStatus(''); measureEyeAt=performance.now()+1500;
     s.addEventListener('end',()=>{ session=null; vrBtn.textContent='Enter VR'; world.position.y=0;
@@ -1253,6 +1385,8 @@ renderer.setAnimationLoop(()=>{
   if(swapFrom && (now>swapUntil || !swapFrom.group.visible)) endSwap();
   if(needArrange) arrange();
   updateGaze();
+  updateFocus(now);
+  if(pxOn) measurePx();
   pollPad(now);
 
   if(renderer.xr.isPresenting){
