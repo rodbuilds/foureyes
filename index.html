@@ -678,7 +678,9 @@ document.getElementById('linkSize').onchange=e=>{ linkSize=e.target.checked; if(
 // ---------- raycasting ----------
 function targets(){ const t=[]; if(lib.open) t.push(panel); for(const s of visible()) t.push(s.bar, s.mode==='2d'? s.mono : s.left); return t; }
 const tmpM=new THREE.Matrix4();
-function raycastFrom(rc){ const h=rc.intersectObjects(targets(),false)[0]; if(!h) return null;
+// 3D screens are hit-tested on their left-eye mesh, which lives on layer 1 (so only the left eye draws it).
+// Raycasters only see layer 0 by default, which made 3D screens impossible to point at.
+function raycastFrom(rc){ rc.layers.enable(1); const h=rc.intersectObjects(targets(),false)[0]; if(!h) return null;
   const {slot,kind}=h.object.userData;
   if(kind==='panel') return {kind,btn:browserHit(h.uv),dist:h.distance};
   if(kind==='bar'){ const b=slot.hitBar(h.uv); return {slot,kind,btn:b,dist:h.distance}; }
