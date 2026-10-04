@@ -140,3 +140,26 @@ test('gathering reads every folder, and stops at the limit on a huge tree', asyn
   assert.deepEqual({ dirs: r.dirs, files: r.files, photos: r.photos, sets: r.sets }, { dirs: 17, files: 48, photos: 192, sets: 16 });
   assert.equal(r.capped, true); assert.equal(r.total, r.limit);
 });
+
+test('↻ refresh picks up files and folders added or removed after SHUFFLE ALL', async () => {
+  await inFolder(0, 'DANCE');
+  const r = await app.run(async () => {
+    const F = window.FourEyes, T = window.T, s = F.slots[0], videos = () => s.list.length;
+    F.browserClick({ id: 'kind', data: 'file' });
+    F.browserClick({ id: 'shuffletree' }); await T.wait(400); const before = videos();
+    // meanwhile, on disk: a 17th folder with 3 videos appears, and one video is deleted
+    window.DANCE.vdir.set('Set17', T.dir('Set17', [T.file('n1.mp4'), T.file('n2.mp4'), T.file('n3.mp4')]));
+    window.DANCE.vdir.get('Set01').vdir.delete('clip1.mp4');
+    F.openBrowser(0); F.browserClick({ id: 'shuffletree' }); await T.wait(400); const cached = videos();
+    F.openBrowser(0); F.browserClick({ id: 'refresh' }); await T.wait(300); const note = F.lib.note;
+    F.browserClick({ id: 'shuffletree' }); await T.wait(400); const after = videos();
+    // put the collection back as it was
+    window.DANCE.vdir.delete('Set17'); window.DANCE.vdir.get('Set01').vdir.set('clip1.mp4', T.file('clip1.mp4'));
+    F.openBrowser(0); F.browserClick({ id: 'refresh' }); await T.wait(300); F.closeBrowser();
+    return { before, cached, after, note };
+  });
+  assert.equal(r.before, 48);
+  assert.equal(r.cached, 48, 'without a refresh, SHUFFLE ALL reuses its earlier scan');
+  assert.equal(r.after, 50, 'after refreshing: 48 + 3 new - 1 deleted');
+  assert.match(r.note, /Refreshed/);
+});

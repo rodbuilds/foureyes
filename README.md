@@ -30,6 +30,7 @@ nothing to install and no account, and your files never leave your computer.
   shuffles a whole collection. A **VIDEOS / PHOTOS** switch picks which of the two they play.
   Photos are shuffled as **sets**: each folder plays in order, and the sets come in random order
   (PREV / NEXT skip a whole set).
+  After adding or removing files, press **↻** in the browser so the next shuffle sees them.
 - **Photo slideshows.** Any screen can show a folder of photos as a slideshow, with an
   adjustable time per photo.
 - **3D.** Side-by-side (SBS) and over/under (OU) videos and photos, full or half width, with a

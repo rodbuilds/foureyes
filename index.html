@@ -167,7 +167,7 @@ button:disabled{opacity:.5;cursor:not-allowed}
       <dt>Right stick click</dt><dd>Show or hide the head cursor</dd>
     </dl>
     <p>In the media browser: A opens the folder or plays the video under the head cursor, B goes back up a folder (or closes the browser), LB / RB or the D-pad turn pages. Each screen remembers where it was in the browser. ⚙ Settings (top left of the browser) has the layout, curved screens, focus zoom, fit all in view, and the other options on this page, so you can change them without taking the headset off. Use "Load to screen" on the left to pick which screen the video goes to, and "Format" for 3D videos (SBS = side by side, OU = over/under, ½ = half-width).</p>
-    <p>Picking a video makes the rest of its folder that screen's playlist. "When a video ends" (in the browser, or on the screen's card) chooses whether it stops, plays the next video in the folder, or plays the folder in random order. PLAY ALL and SHUFFLE at the top of the browser start the whole folder, and NEXT on a screen's control bar skips ahead. SHUFFLE ALL also takes in every subfolder (all the way down), so one press shuffles a folder of folders; from the top of the browser it shuffles all your folders together. The VIDEOS / PHOTOS switch beside them chooses what those three buttons play, separately for each screen (picking a single file always plays that file's kind).</p>
+    <p>Picking a video makes the rest of its folder that screen's playlist. "When a video ends" (in the browser, or on the screen's card) chooses whether it stops, plays the next video in the folder, or plays the folder in random order. PLAY ALL and SHUFFLE at the top of the browser start the whole folder, and NEXT on a screen's control bar skips ahead. SHUFFLE ALL also takes in every subfolder (all the way down), so one press shuffles a folder of folders; from the top of the browser it shuffles all your folders together. The ↻ button next to UP makes the browser forget what it has read (SHUFFLE ALL scans, dates and thumbnails) and read your folders again, so files you've added or removed since show up. The VIDEOS / PHOTOS switch beside them chooses what those three buttons play, separately for each screen (picking a single file always plays that file's kind).</p>
     <p>SHUFFLE ALL on PHOTOS plays photo sets: each folder's photos in name order, one set after another, with the sets in random order. PREV / NEXT (and D-pad left / right) skip to the previous or next set; −10 / +10 and LB / RB step single photos. At the end of a set the next one starts; with LOOP on, the same set repeats; with "When it ends" on STOP it stops, and on NEXT the sets go in folder order and stop after the last.</p>
     <p>Your settings (the ones on the ⚙ Settings page, plus photo time, VR render and the layout) are remembered between visits in this browser. "Reset settings", on the page or the Settings page, puts them back. What was playing is not remembered.</p>
     <p>Each screen's control bar has two rows: FILES, PREV −10 ▶ +10 NEXT, MUTE V− V+ SOLO, S− S+ LOOP SWAP on top, and the seek bar, time and file name underneath.</p>
@@ -1395,6 +1395,13 @@ async function shuffleAll(){
   const msg=(kind!==want? 'No '+KIND_NAME[want]+' in these folders, so shuffling ' : 'Shuffling ')+what+(res.capped? ' (stopped at '+TREE_LIMIT+')' : '');
   setTimeout(()=>s.flashMsg(msg,4000),300);
 }
+// ↻: forget everything read from the folders this session (SHUFFLE ALL scans, LATEST dates,
+// thumbnails) and read the current folder again, so added or removed files and folders show up.
+function refreshLibrary(){
+  if(gathering) return;
+  treeCache.clear(); dates.clear(); clearThumbQ(); thumbs.clear();
+  refreshDir().then(()=>{ lib.note='Refreshed: folders will be read again'; lib.dirty=true; });
+}
 function browserClick(b){
   switch(b.id){
     case 'close': closeBrowser(); break;
@@ -1418,6 +1425,7 @@ function browserClick(b){
     case 'playall': playFromFolder(null,'next'); break;
     case 'shuffleall': playFromFolder(null,'shuffle'); break;
     case 'shuffletree': shuffleAll(); break;
+    case 'refresh': refreshLibrary(); break;
     case 'kind': slots[lib.target].playKind=lib.kind=b.data; break;
   }
   lib.dirty=true;
@@ -1488,8 +1496,9 @@ function drawPanel(){
   const settings=lib.view==='settings';
   c.fillStyle='#e9e8f2'; c.font='700 60px '+DISP; c.textAlign='left'; c.textBaseline='middle'; c.fillText(settings? 'SETTINGS' : 'MEDIA',40,64);
   btn('up','▲  UP',440,24,150,72,{dis:settings || !lib.path.length});
+  btn('refresh','↻',600,24,90,72,{dis:settings,font:'700 40px '+BODY}); // forget what was read, read the folders again
   c.fillStyle='#e9e8f2'; c.font='600 34px '+BODY; c.textAlign='left';
-  c.fillText(settings? 'Settings' : fitLeft(c,['Places',...lib.path.map(n=>n.name)].join('  ›  '),450),620,62);
+  c.fillText(settings? 'Settings' : fitLeft(c,['Places',...lib.path.map(n=>n.name)].join('  ›  '),365),705,62);
   const noFiles=settings || !lib.entries.some(isPlayable);
   // VIDEOS / PHOTOS: what the three play buttons play, chosen per screen (not used for scenes)
   const folders=!settings && lib.src!=='scenes', TB='700 30px '+DISP;
@@ -1929,7 +1938,7 @@ if(new URLSearchParams(location.search).has("test")) window.FourEyes={
   applyLayout, arrange, fitInView, layoutSpan, topAngle, visible, screenAngle, sizeTo,
   bendScreen, setUV, findBorders, raycastFrom, activate, swapScreens,
   openBrowser, closeBrowser, browserClick, refreshDir, drawPanel, gatherTree, shuffleAll, setSetting, stepPhotoSecs,
-  resetPrefs, PREFS_KEY, renderer, photoTexture, uploads, UPLOAD_ROWS, decodeImage, PHOTO_AHEAD, updateFocus, focus:{ get:()=>focusSlot, set:s=>{ focusSlot=focusCand=s; } },
+  resetPrefs, PREFS_KEY, refreshLibrary, renderer, photoTexture, uploads, UPLOAD_ROWS, decodeImage, PHOTO_AHEAD, updateFocus, focus:{ get:()=>focusSlot, set:s=>{ focusSlot=focusCand=s; } },
   layout:()=>layout, eyeY:()=>eyeY, setEye:v=>{ eyeY=v; needArrange=true; }, barButtons:()=>barButtons, photoSecs:()=>photoSecs,
 };
 })();
