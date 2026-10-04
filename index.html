@@ -121,6 +121,7 @@ button:disabled{opacity:.5;cursor:not-allowed}
     <button id="restartAll">Restart all together</button>
     <button id="muteAll">Mute all</button>
     <button id="fitView" title="Resize every screen together to fit 90° across, with nothing more than 20° above your eyes">Fit all in view</button>
+    <button id="resetPrefs" title="Put every setting back to how Four Eyes starts out">Reset settings</button>
     <label><input type="checkbox" id="curveOn" checked> Curved screens</label>
     <label><input type="checkbox" id="focusOn"> Focus zoom (the screen you look at comes closer)</label>
     <label><input type="checkbox" id="linkSize"> Same size for all screens</label>
@@ -168,6 +169,7 @@ button:disabled{opacity:.5;cursor:not-allowed}
     <p>In the media browser: A opens the folder or plays the video under the head cursor, B goes back up a folder (or closes the browser), LB / RB or the D-pad turn pages. Each screen remembers where it was in the browser. ⚙ Settings (top left of the browser) has the layout, curved screens, focus zoom, fit all in view, and the other options on this page, so you can change them without taking the headset off. Use "Load to screen" on the left to pick which screen the video goes to, and "Format" for 3D videos (SBS = side by side, OU = over/under, ½ = half-width).</p>
     <p>Picking a video makes the rest of its folder that screen's playlist. "When a video ends" (in the browser, or on the screen's card) chooses whether it stops, plays the next video in the folder, or plays the folder in random order. PLAY ALL and SHUFFLE at the top of the browser start the whole folder, and NEXT on a screen's control bar skips ahead. SHUFFLE ALL also takes in every subfolder (all the way down), so one press shuffles a folder of folders; from the top of the browser it shuffles all your folders together. The VIDEOS / PHOTOS switch beside them chooses what those three buttons play, separately for each screen (picking a single file always plays that file's kind).</p>
     <p>SHUFFLE ALL on PHOTOS plays photo sets: each folder's photos in name order, one set after another, with the sets in random order. PREV / NEXT (and D-pad left / right) skip to the previous or next set; −10 / +10 and LB / RB step single photos. At the end of a set the next one starts; with LOOP on, the same set repeats; with "When it ends" on STOP it stops, and on NEXT the sets go in folder order and stop after the last.</p>
+    <p>Your settings (the ones on the ⚙ Settings page, plus photo time, VR render and the layout) are remembered between visits in this browser. "Reset settings", on the page or the Settings page, puts them back. What was playing is not remembered.</p>
     <p>Each screen's control bar has two rows: FILES, PREV −10 ▶ +10 NEXT, MUTE V− V+ SOLO, S− S+ LOOP SWAP on top, and the seek bar, time and file name underneath.</p>
     <p>Focus zoom (a setting): the screen you look at slides toward you so it's bigger and sharper, and stays that way while you use its control bar. Fit all in view resizes every screen together so they fit within 90° across, with nothing more than 20° above your eyes (looking up is the tiring direction). Curved screens (on by default) wrap each screen around you so its edges don't stretch.</p>
     <p>Cropping empty borders: turn on "CROP button on screen bars" and press CROP while the video plays. It looks for plain borders that stay still while the picture moves, of any colour. Press it again to undo. Right stick left / right, or the sliders on a screen's card, crop by hand. "Auto-crop every video" does this whenever something new loads. In the 3 wide and 4 wide layouts a cropped picture grows to fill the height.</p>
@@ -196,6 +198,7 @@ const LAYOUTS = {
 };
 let layout = '2';
 let linkSize = false, needArrange = true;
+let prefsReady = false; // settings are only saved once the saved ones have been loaded
 const NO_CROP = {l:0,r:0,t:0,b:0}; // defined up here because every screen starts with it when it's created
 let autoCropAll = false; // crop borders automatically on every new video and photo
 let showCropBtn = false; // CROP on each screen's control bar is optional
@@ -942,6 +945,7 @@ function setPhotoSecs(v){
   photoSecs=v; photoSel.value=String(v);
   const now=performance.now();
   for(const s of slots) if(s.photo){ if(s.slidePlaying) s.slideNext=now+v*1000; s.flashMsg('Each photo: '+v+' s'); } // restart the current photo's timer
+  savePrefs();
 }
 const photoSel=document.getElementById('photoSecs');
 photoSel.innerHTML=PHOTO_STEPS.map(v=>`<option value="${v}">${v<60? v+' seconds' : (v/60)+(v===60?' minute':' minutes')}</option>`).join('');
@@ -954,6 +958,7 @@ function applyLayout(l){
   arrange();
   document.querySelectorAll('#layoutSeg button').forEach(b=>b.setAttribute('aria-pressed', b.dataset.l===l));
   if(typeof selected==='number' && !slots[selected].group.visible) setSelected(0);
+  savePrefs();
 }
 document.querySelectorAll('#layoutSeg button').forEach(b=>b.addEventListener('click',()=>applyLayout(b.dataset.l)));
 applyLayout('2');
@@ -1316,6 +1321,7 @@ function browserClick(b){
     case 'layout': applyLayout(b.data); break;
     case 'fit': fitInView(90); break;
     case 'psecs': stepPhotoSecs(b.data); break;
+    case 'resetprefs': resetPrefs(); break;
     case 'root': lib.view='files'; openRoot(lib.roots[b.data]); break;
     case 'tile': { const e=pageEntries()[b.data]; if(!e) break;
       if(e.root) openRoot(e.root); else if(e.kind==='dir'){ lib.path.push(e); refreshDir(); } else playFromFolder(e); break; }
@@ -1523,7 +1529,8 @@ function drawSettings(c,btn,acc){
     c.fillStyle='#e9e8f2'; c.font='700 34px '+DISP; c.textAlign='center'; c.fillText(photoSecs+' s',x+CW-193,y+54);
     btn('psecs','+',x+CW-148,y+20,80,64,{data:1}); }
   c.fillStyle='#9a9eb9'; c.font='500 24px '+BODY; c.textAlign='left';
-  c.fillText('VR render resolution is on the page; it takes effect the next time you press Enter VR.',440,Y0+5*(RH+GAP)+30);
+  c.fillText('Settings are remembered. VR render resolution is on the page (it applies when you next enter VR).',440,Y0+5*(RH+GAP)+30);
+  btn('resetprefs','RESET SETTINGS',1730,Y0+5*(RH+GAP)+2,294,58,{font:'700 28px '+DISP});
 }
 // ---------- head cursor ----------
 let headCursor=true, gazeHit=null, gazeSlot=null;
@@ -1707,12 +1714,43 @@ const SETTINGS = {
 function setSetting(k,v){
   SETTINGS[k].set(v);
   const e=document.getElementById(SETTINGS[k].el); if(e) e.checked=v;
-  lib.dirty=true;
+  lib.dirty=true; savePrefs();
 }
 for(const k in SETTINGS){
   const e=document.getElementById(SETTINGS[k].el);
   if(e){ e.checked=SETTINGS[k].get(); e.onchange=()=>setSetting(k,e.checked); }
 }
+
+// ---------- remembered settings ----------
+// The settings (everything above, plus photo time, VR render resolution and the layout) are kept in
+// this browser's local storage and restored on the next visit. Only settings: nothing about what was
+// playing. Each place the page is opened from (the website, a local copy) keeps its own.
+const PREFS_KEY='foureyes-settings', xrScaleSel=document.getElementById('xrScale');
+function currentPrefs(){
+  return { settings:Object.fromEntries(Object.entries(SETTINGS).map(([k,st])=>[k,st.get()])),
+           photoSecs, xrScale:xrScaleSel.value, layout };
+}
+const DEFAULT_PREFS=currentPrefs(); // how Four Eyes starts out, for Reset settings
+function savePrefs(){
+  if(!prefsReady) return;
+  try{ localStorage.setItem(PREFS_KEY, JSON.stringify({v:1, ...currentPrefs()})); }catch(e){} // storage may be off (private window)
+}
+// Apply saved settings, ignoring anything unknown or out of range, so an old or damaged save can't break the page.
+function applyPrefs(p){
+  for(const [k,v] of Object.entries(p.settings||{})) if(SETTINGS[k] && typeof v==='boolean' && SETTINGS[k].get()!==v) setSetting(k,v);
+  if(PHOTO_STEPS.includes(p.photoSecs) && p.photoSecs!==photoSecs) setPhotoSecs(p.photoSecs);
+  if([...xrScaleSel.options].some(o=>o.value===String(p.xrScale))) xrScaleSel.value=String(p.xrScale);
+  if(LAYOUTS[p.layout] && p.layout!==layout) applyLayout(p.layout);
+}
+try{ const saved=JSON.parse(localStorage.getItem(PREFS_KEY)||'null'); if(saved && saved.v===1) applyPrefs(saved); }catch(e){}
+prefsReady=true;
+function resetPrefs(){
+  applyPrefs(DEFAULT_PREFS);
+  try{ localStorage.removeItem(PREFS_KEY); }catch(e){}
+  setStatus('Settings are back to how Four Eyes starts out.');
+}
+xrScaleSel.addEventListener('change',savePrefs);
+document.getElementById('resetPrefs').onclick=resetPrefs;
 
 renderer.setAnimationLoop(()=>{
   const now=performance.now();
@@ -1805,6 +1843,7 @@ if(new URLSearchParams(location.search).has("test")) window.FourEyes={
   applyLayout, arrange, fitInView, layoutSpan, topAngle, visible, screenAngle, sizeTo,
   bendScreen, setUV, findBorders, raycastFrom, activate, swapScreens,
   openBrowser, closeBrowser, browserClick, refreshDir, drawPanel, gatherTree, shuffleAll, setSetting, stepPhotoSecs,
+  resetPrefs, PREFS_KEY,
   layout:()=>layout, eyeY:()=>eyeY, setEye:v=>{ eyeY=v; needArrange=true; }, barButtons:()=>barButtons, photoSecs:()=>photoSecs,
 };
 })();

@@ -38,6 +38,8 @@ nothing to install and no account, and your files never leave your computer.
   pointer: look at any button and press **A**. Touch/motion controllers also work, and so
   does the mouse on the desktop preview.
 - **Rearrange on the fly.** Swap two screens' places without interrupting playback.
+- **Remembers your settings.** Layout, curved screens, focus zoom, photo time, VR render
+  resolution and the other settings come back next time; **Reset settings** undoes them.
 - **Private by design.** Everything runs in your browser. Videos and photos are read straight
   from your disk and are never uploaded anywhere.
 
