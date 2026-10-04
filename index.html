@@ -1368,8 +1368,9 @@ function openBrowser(i){
   setTarget(t);
   camera.updateMatrixWorld();
   const head=new THREE.Vector3().setFromMatrixPosition(camera.matrixWorld);
-  const dir=new THREE.Vector3(0,0,-1).transformDirection(camera.matrixWorld); dir.y=0;
-  if(dir.lengthSq()<1e-4) dir.set(0,0,-1); dir.normalize();
+  // Always straight ahead, in the middle of the layout (the way Reset View faces), not wherever you
+  // happen to be looking: opened from a screen at the far end of 4 wide it used to land off to the side.
+  const dir=new THREE.Vector3(0,0,-1);
   panel.position.copy(head).addScaledVector(dir,PANEL_DIST); panel.position.y=head.y-0.1;
   panel.lookAt(head.x,panel.position.y,head.z);
   lib.open=true; panel.visible=true; lib.dirty=true;
@@ -1843,7 +1844,7 @@ document.addEventListener('visibilitychange',()=>{
 // (npm test, see tests/). Normal visits never set this.
 if(new URLSearchParams(location.search).has("test")) window.FourEyes={
   THREE, R, BW, BH, ROW2, CW, CH, TREE_LIMIT, FIT_UP_DEG, KIND_NAME,
-  slots, lib, camera, world, panelCanvas, SETTINGS, treeCache, slotAt,
+  slots, lib, camera, world, panel, panelCanvas, SETTINGS, treeCache, slotAt,
   applyLayout, arrange, fitInView, layoutSpan, topAngle, visible, screenAngle, sizeTo,
   bendScreen, setUV, findBorders, raycastFrom, activate, swapScreens,
   openBrowser, closeBrowser, browserClick, refreshDir, drawPanel, gatherTree, shuffleAll, setSetting, stepPhotoSecs,
