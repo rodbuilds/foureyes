@@ -166,7 +166,7 @@ button:disabled{opacity:.5;cursor:not-allowed}
       <dt>Right stick click</dt><dd>Show or hide the head cursor</dd>
     </dl>
     <p>In the media browser: A opens the folder or plays the video under the head cursor, B goes back up a folder (or closes the browser), LB / RB or the D-pad turn pages. Each screen remembers where it was in the browser. ⚙ Settings (top left of the browser) has the layout, curved screens, focus zoom, fit all in view, and the other options on this page, so you can change them without taking the headset off. Use "Load to screen" on the left to pick which screen the video goes to, and "Format" for 3D videos (SBS = side by side, OU = over/under, ½ = half-width).</p>
-    <p>Picking a video makes the rest of its folder that screen's playlist. "When a video ends" (in the browser, or on the screen's card) chooses whether it stops, plays the next video in the folder, or plays the folder in random order. PLAY ALL and SHUFFLE at the top of the browser start the whole folder, and NEXT on a screen's control bar skips ahead.</p>
+    <p>Picking a video makes the rest of its folder that screen's playlist. "When a video ends" (in the browser, or on the screen's card) chooses whether it stops, plays the next video in the folder, or plays the folder in random order. PLAY ALL and SHUFFLE at the top of the browser start the whole folder, and NEXT on a screen's control bar skips ahead. SHUFFLE ALL also takes in every subfolder (all the way down), so one press shuffles a folder of folders; from the top of the browser it shuffles all your folders together. The VIDEOS / PHOTOS switch beside them chooses what those three buttons play, separately for each screen (picking a single file always plays that file's kind).</p>
     <p>Each screen's control bar has two rows: FILES, PREV −10 ▶ +10 NEXT, MUTE V− V+ SOLO, S− S+ LOOP SWAP on top, and the seek bar, time and file name underneath.</p>
     <p>Focus zoom (a setting): the screen you look at slides toward you so it's bigger and sharper, and stays that way while you use its control bar. Fit all in view resizes every screen together so they fit within 90° across, with nothing more than 20° above your eyes (looking up is the tiring direction). Curved screens (on by default) wrap each screen around you so its edges don't stretch.</p>
     <p>Cropping empty borders: turn on "CROP button on screen bars" and press CROP while the video plays. It looks for plain borders that stay still while the picture moves, of any colour. Press it again to undo. Right stick left / right, or the sliders on a screen's card, crop by hand. "Auto-crop every video" does this whenever something new loads. In the 3 wide and 4 wide layouts a cropped picture grows to fill the height.</p>
@@ -316,6 +316,7 @@ class Slot{
     this.scales={}; // this screen's size in each layout, so layouts don't inherit each other's sizes
     this.mode='2d'; this.swap=false; this.scale=1; this.baseW=2; this.baseH=2*9/16; this.loaded=false; this.name='';
     this.lastHover=0; this.hoverBtn=null; this.hoverSeek=null; this.barDirty=true; this.lastDraw=0;
+    this.playKind='file'; // VIDEOS ('file') or PHOTOS ('image'): what PLAY ALL, SHUFFLE and SHUFFLE ALL play
     this.sort='az'; // this screen's folder sort in the media browser
     this.photo=null; this.slidePlaying=false; this.slideNext=0; this.photoTok=0; this.pre=null; // slideshow state
     this.crop={...NO_CROP}; this.cropTry=0; // fractions cut from each edge of the picture (one eye's half, for 3D)
@@ -478,6 +479,7 @@ class Slot{
     if(p<0) p=n-1;
     this.pos=p;
     const e=this.list[this.order[p]];
+    this.curFolder=e.folder||null; // set for SHUFFLE ALL items, which come from many folders
     if(e.kind==='image'){ this.curKey=e.key; lib.dirty=true; this.showPhoto(e); return; }
     try{ const f=await getFile(e); this.autoplay=true; this.loadFile(f,true); }
     catch(err){ this.err('Couldn\'t open '+e.name+': '+(err.message||err)); }
@@ -585,7 +587,7 @@ class Slot{
     const b=barButtons.find(b=>x>=b.x && x<=b.x+b.w); return b?{id:b.id}:null;
   }
   // a short message in the bar's name area, e.g. after changing the volume
-  flashMsg(t){ this.flash=t; this.flashUntil=performance.now()+1500; this.barDirty=true; }
+  flashMsg(t,ms=1500){ this.flash=t; this.flashUntil=performance.now()+ms; this.barDirty=true; }
   drawBar(){
     const c=this.barCanvas.getContext('2d'), v=this.video;
     c.clearRect(0,0,BW,BH);
@@ -625,7 +627,7 @@ class Slot{
     if(this.flashUntil){ info=this.flash; col=this.color; }
     else {
       const pl=this.list&&this.list.length>1? (this.pos+1)+'/'+this.list.length+(this.endMode==='shuffle'?' shuffled':'')+'  ·  ' : '';
-      info=this.name? pl+this.name.replace(/\.[^.]+$/,'') : 'Screen '+(this.i+1);
+      info=this.name? pl+(this.list && this.curFolder? this.curFolder+'  ·  ' : '')+this.name.replace(/\.[^.]+$/,'') : 'Screen '+(this.i+1);
     }
     c.fillStyle=col; c.font='500 26px Barlow, Arial, sans-serif';
     if(nw>40) c.fillText(fit(c,info,nw),nx,ty+1);
@@ -961,6 +963,7 @@ const lib={roots:[], path:[], entries:[], page:0, gen:0, msg:'', note:'', target
 const PER_PAGE=12;
 const isPlayable=e=>e.kind==='file'||e.kind==='image';
 // Folder sort: 'az' by name, or 'latest' newest first. Folders always stay above files.
+lib.kind='file'; // mirrors the target screen's VIDEOS / PHOTOS choice (Slot.playKind)
 lib.sort='az'; // mirrors the target screen's own sort (Slot.sort); every screen starts at A–Z
 const dates=new Map(); // entry key -> last-modified ms, cached for the session
 const fmtDate=t=>new Date(t).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
@@ -1188,21 +1191,72 @@ function browserBack(){ if(lib.view==='settings'){ lib.view='files'; lib.dirty=t
 function turnPage(d){ const p=Math.max(0,Math.min(pageCount()-1,lib.page+d)); if(p!==lib.page){ lib.page=p; lib.dirty=true; queueThumbs(); } }
 function applyFmt(){ const s=slots[lib.target]; s.mode=lib.mode; s.swap=lib.swap; s.applyMode(); }
 function setTarget(i){
-  lib.target=i; lib.mode=slots[i].mode; lib.swap=slots[i].swap; lib.dirty=true;
+  lib.target=i; lib.mode=slots[i].mode; lib.swap=slots[i].swap; lib.kind=slots[i].playKind; lib.dirty=true;
   // the browser stays in the same folder, but shows it the way this screen sorts
   if(lib.sort!==slots[i].sort){ lib.sort=slots[i].sort; if(lib.path.length && lib.src!=='scenes') refreshDir(); }
 }
 // play a file from the current folder; the rest of the folder becomes that screen's playlist
 function playFromFolder(e,endMode){
-  const kinds={}; for(const x of lib.entries) if(isPlayable(x)) kinds[x.kind]=(kinds[x.kind]||0)+1;
-  const kind= e? e.kind : Object.keys(kinds).sort((a,b)=>kinds[b]-kinds[a])[0];
+  const has=k=>lib.entries.some(x=>x.kind===k), want=slots[lib.target].playKind, other=want==='file'? 'image' : 'file';
+  // a picked file decides for itself; otherwise the screen's VIDEOS / PHOTOS choice, falling back to the
+  // other kind (with a note) when there's none of it here
+  const kind= e? e.kind : has('scene')? 'scene' : has(want)? want : other;
   const files=lib.entries.filter(x=>x.kind===kind); if(!files.length) return;
   const s=slots[lib.target];
+  if(!e && kind===other) setTimeout(()=>s.flashMsg('No '+KIND_NAME[want]+' here, so playing the '+KIND_NAME[other],4000),300);
   if(endMode) s.endMode=endMode;
   const cur= e? files.indexOf(e) : s.endMode==='shuffle'? Math.random()*files.length|0 : 0;
   s.mode=lib.mode; s.swap=lib.swap; s.applyMode();
   s.autoplay=true; s.setList(files,cur); s.next(0);
   closeBrowser(); setSelected(s.i);
+}
+const KIND_NAME={file:'videos', image:'photos'};
+const TREE_LIMIT=10000;           // a single SHUFFLE ALL stops gathering here, so a huge tree can't hang the page
+const treeCache=new Map();        // folder(s) -> what was gathered, for this session
+// Walk the folders depth-first, collecting videos and photos separately. Only names are read, not files,
+// so this is quick even over a network drive. progress(folders, videos, photos) is called per folder.
+async function gatherTree(roots,progress){
+  const out={file:[],image:[],dirs:0,capped:false}, stack=[...roots];
+  while(stack.length){
+    const d=stack.pop(); out.dirs++;
+    let kids; try{ kids=await listDir(d); }catch(e){ continue; } // unreadable folder: skip it
+    for(const k of kids){
+      if(k.kind==='dir') stack.push(k);
+      else if(k.kind==='file' || k.kind==='image'){
+        out[k.kind].push({...k, folder:d.name});
+        if(out.file.length+out.image.length>=TREE_LIMIT){ out.capped=true; return out; }
+      }
+    }
+    progress(out.dirs,out.file.length,out.image.length);
+  }
+  return out;
+}
+let gathering=false;
+async function shuffleAll(){
+  if(gathering) return;
+  const roots= lib.path.length? [lib.path[lib.path.length-1]] : lib.roots.filter(r=>r.temp || r.perm==='granted').map(r=>r.node);
+  if(!roots.length) return;
+  const s=slots[lib.target], key=roots.map(r=>r.key).join('|');
+  let res=treeCache.get(key);
+  if(!res){
+    gathering=true; lib.note='Gathering…'; lib.dirty=true;
+    try{ res=await gatherTree(roots,(d,v,p)=>{ lib.note='Gathering… '+v+' videos, '+p+' photos from '+d+' folders'; lib.dirty=true; }); }
+    finally{ gathering=false; }
+    treeCache.set(key,res);
+  }
+  const want=s.playKind, other=want==='file'? 'image' : 'file';
+  let kind=want, list=res[want];
+  if(!list.length){ kind=other; list=res[other]; }
+  if(!list.length){ lib.note='Nothing to play in here or in its subfolders.'; lib.dirty=true; return; }
+  lib.note='';
+  s.endMode='shuffle'; s.mode=lib.mode; s.swap=lib.swap; s.applyMode();
+  s.autoplay=true; s.setList(list, Math.random()*list.length|0); s.next(0);
+  closeBrowser(); setSelected(s.i);
+  const count=(k,num)=>num+' '+(num===1? KIND_NAME[k].slice(0,-1) : KIND_NAME[k]); // "1 photo", "48 videos"
+  const nf=new Set(list.map(x=>x.folder)).size; // folders that actually had something to play
+  const msg= kind!==want? 'No '+KIND_NAME[want]+' in these folders, so shuffling '+count(kind,list.length)
+    : 'Shuffling '+count(kind,list.length)+' from '+nf+(nf===1? ' folder' : ' folders')+(res.capped? ' (stopped at '+TREE_LIMIT+')' : '');
+  setTimeout(()=>s.flashMsg(msg,4000),300);
 }
 function browserClick(b){
   switch(b.id){
@@ -1225,6 +1279,8 @@ function browserClick(b){
     case 'end': slots[lib.target].setEndMode(b.data); break;
     case 'playall': playFromFolder(null,'next'); break;
     case 'shuffleall': playFromFolder(null,'shuffle'); break;
+    case 'shuffletree': shuffleAll(); break;
+    case 'kind': slots[lib.target].playKind=lib.kind=b.data; break;
   }
   lib.dirty=true;
 }
@@ -1294,10 +1350,15 @@ function drawPanel(){
   c.fillStyle='#e9e8f2'; c.font='700 60px '+DISP; c.textAlign='left'; c.textBaseline='middle'; c.fillText(settings? 'SETTINGS' : 'MEDIA',40,64);
   btn('up','▲  UP',440,24,150,72,{dis:settings || !lib.path.length});
   c.fillStyle='#e9e8f2'; c.font='600 34px '+BODY; c.textAlign='left';
-  c.fillText(settings? 'Settings' : fitLeft(c,['Places',...lib.path.map(n=>n.name)].join('  ›  '),880),620,62);
+  c.fillText(settings? 'Settings' : fitLeft(c,['Places',...lib.path.map(n=>n.name)].join('  ›  '),450),620,62);
   const noFiles=settings || !lib.entries.some(isPlayable);
-  btn('playall','▶  PLAY ALL',1520,24,200,72,{dis:noFiles});
-  btn('shuffleall','⤮  SHUFFLE',1730,24,200,72,{dis:noFiles});
+  // VIDEOS / PHOTOS: what the three play buttons play, chosen per screen (not used for scenes)
+  const folders=!settings && lib.src!=='scenes', TB='700 30px '+DISP;
+  btn('kind','VIDEOS',1090,24,118,72,{data:'file',on:lib.kind==='file',dis:!folders,font:TB});
+  btn('kind','PHOTOS',1212,24,118,72,{data:'image',on:lib.kind==='image',dis:!folders,font:TB});
+  btn('playall','▶  PLAY ALL',1340,24,180,72,{dis:noFiles,font:TB});
+  btn('shuffleall','⤮  SHUFFLE',1530,24,180,72,{dis:noFiles,font:TB});
+  btn('shuffletree','⤮  SHUFFLE ALL',1720,24,210,72,{dis:!folders || gathering || (!lib.path.length && !lib.roots.length),font:TB});
   btn('close','✕',1940,24,84,72);
 
   // sidebar
@@ -1313,7 +1374,7 @@ function drawPanel(){
     m? btn('fmt',t,x,y,114,78,{data:m,on:lib.mode===m}) : lib.mode!=='2d' && btn('eyes',t,x,y,114,78,{on:lib.swap}); });
   label('WHEN A VIDEO ENDS',40,1038);
   [['stop','STOP'],['next','NEXT'],['shuffle','SHUFFLE']].forEach(([m,t],k)=>
-    btn('end',t,40+k*125,1058,114,72,{data:m,on:slots[lib.target].endMode===m}));
+    btn('end',t,40+k*125,1058,114,72,{data:m,on:slots[lib.target].endMode===m,font:'700 28px '+DISP}));
 
   // grid (or the settings)
   const GX=440, GY=140, TW=378, TH=292, GAP=24;

@@ -26,7 +26,8 @@ nothing to install and no account, and your files never leave your computer.
   layout and options, so you never need to take the headset off.
 - **Playlists.** Picking a video makes the rest of its folder that screen's playlist. When a
   video ends, a screen can stop, play the next one, or shuffle the folder. PLAY ALL and
-  SHUFFLE start a whole folder.
+  SHUFFLE start a whole folder; **SHUFFLE ALL** also mixes in every subfolder, so one press
+  shuffles a whole collection. A **VIDEOS / PHOTOS** switch picks which of the two they play.
 - **Photo slideshows.** Any screen can show a folder of photos as a slideshow, with an
   adjustable time per photo.
 - **3D.** Side-by-side (SBS) and over/under (OU) videos and photos, full or half width, with a
