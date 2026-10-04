@@ -322,7 +322,7 @@ class Slot{
     this.lastHover=0; this.hoverBtn=null; this.hoverSeek=null; this.barDirty=true; this.lastDraw=0;
     this.playKind='file'; // VIDEOS ('file') or PHOTOS ('image'): what PLAY ALL, SHUFFLE and SHUFFLE ALL play
     this.sort='az'; // this screen's folder sort in the media browser
-    this.photo=null; this.slidePlaying=false; this.slideNext=0; this.photoTok=0; this.pre=null; // slideshow state
+    this.photo=null; this.slidePlaying=false; this.slideNext=0; this.photoTok=0; this.pcache=null; // slideshow state
     this.crop={...NO_CROP}; this.cropTry=0; // fractions cut from each edge of the picture (one eye's half, for 3D)
     this.list=null; this.order=null; this.pos=0; this.endMode='next'; // playlist: the folder the video came from
     this.lastT=-1; this.stallT=-1; this.stallSince=0;
@@ -528,8 +528,10 @@ class Slot{
   async showPhoto(e){
     const tok=++this.photoTok;
     let im=null;
-    if(this.pre && this.pre.key===e.key){ im=this.pre; this.pre=null; }
-    else { try{ im=await decodeImage(e); }catch(err){ this.err('Couldn\'t show '+e.name+': '+(err.message||err)); } }
+    const cache=this.photoCache(), cached=cache.get(e.key);
+    if(cached){ cache.delete(e.key); im=await cached.promise; } // preloaded (or still loading: waiting is still quicker)
+    this.fromCache=!!(cached && im); // for the tests: was this photo ready ahead of time?
+    if(!im){ try{ im=await decodeImage(e); }catch(err){ this.err('Couldn\'t show '+e.name+': '+(err.message||err)); } }
     if(!im){ if(this.slidePlaying && tok===this.photoTok) this.slideNext=performance.now()+1000; return; } // unreadable photo: skip it shortly
     if(tok!==this.photoTok){ disposePhoto(im); return; }
     if(!this.photo){ // switching from video: stop it and let go of its file
@@ -537,8 +539,8 @@ class Slot{
       if(this.url){ URL.revokeObjectURL(this.url); this.url=null; }
       this.srcUrl=null; this.sceneStart=this.sceneEnd=null;
     }
-    if(this.cur) disposePhoto(this.cur);
-    this.cur=im; this.photo={key:e.key}; this.mw=im.w; this.mh=im.h;
+    if(this.cur) cache.set(this.cur.key,{promise:Promise.resolve(this.cur)});
+    im.key=e.key; this.cur=im; this.photo={key:e.key}; this.mw=im.w; this.mh=im.h;
     const t=im.tex || (im.tex=photoTexture(im.bmp));
     for(const m of [this.mono,this.left,this.right]){ m.material.map=t; m.material.needsUpdate=true; }
     if(/\.jps$/i.test(e.name) && this.mode==='2d'){ this.mode='sbs'; this.swap=true; } // JPS is stored side by side, right eye first
@@ -551,12 +553,37 @@ class Slot{
     this.prefetch();
   }
   // decode the next photo ahead of time, so the change is instant
+  // ----- photo preloading -----
+  // Each screen keeps the photos it's likely to show next decoded and already on the GPU: the next
+  // PHOTO_AHEAD in line (crossing into the next set at the end of one) and the one before, for PREV.
+  // Big side-by-side photos take a moment to read and decode, so this is what makes stepping instant.
+  photoCache(){ return this.pcache || (this.pcache=new Map()); } // key -> {promise: decoded photo or null}
+  photoNeighbours(){
+    const out=[]; if(!this.list) return out;
+    const n=this.order.length, add=e=>{ if(e && e.kind==='image') out.push(e); };
+    for(let d=1; d<=PHOTO_AHEAD; d++){
+      const p=this.pos+d;
+      if(p<n){ add(this.list[this.order[p]]); continue; }
+      if(this.sets){ // past the end of this set: the start of the next one
+        const sp=this.setPos+1;
+        if(sp<this.sets.length) add(this.sets[this.setOrder[sp]].items[p-n]);
+      } else if(this.video.loop || this.endMode==='shuffle') add(this.list[this.order[p%n]]);
+    }
+    if(this.pos>0) add(this.list[this.order[this.pos-1]]);
+    return out;
+  }
   prefetch(){
-    if(!this.list || this.endMode==='stop') return;
-    const n=this.order.length; let p=this.pos+1; if(p>=n){ if(!this.video.loop && this.endMode!=='shuffle') return; p=0; }
-    const e=this.list[this.order[p]]; if(!e || e.kind!=='image' || (this.pre&&this.pre.key===e.key)) return;
-    // decoded off the main thread, then uploaded to the GPU now rather than when it's due on screen
-    decodeImage(e).then(im=>{ if(this.pre) disposePhoto(this.pre); im.tex=photoTexture(im.bmp); this.pre={key:e.key,...im}; }).catch(()=>{});
+    const want=this.photoNeighbours(), keys=new Set(want.map(e=>e.key)), cache=this.photoCache();
+    // let go of anything no longer near (it frees GPU memory)
+    for(const [k,c] of cache) if(!keys.has(k)){ cache.delete(k); c.promise.then(im=>{ if(im) disposePhoto(im); }); }
+    // load the rest one at a time, nearest first, so the very next photo is ready soonest
+    for(const e of want) if(!cache.has(e.key)){
+      const entry={};
+      entry.promise=this.pchain=(this.pchain||Promise.resolve()).then(()=>
+        cache.get(e.key)===entry? decodeImage(e).then(im=>{ im.key=e.key; im.tex=photoTexture(im.bmp); return im; }) : null
+      ).catch(()=>null);
+      cache.set(e.key,entry);
+    }
   }
   // the timer ran out on the current photo
   advancePhoto(){
@@ -582,7 +609,8 @@ class Slot{
     if(!this.photo) return;
     this.photo=null; this.slidePlaying=false; this.photoTok++;
     if(this.cur){ disposePhoto(this.cur); this.cur=null; }
-    if(this.pre){ disposePhoto(this.pre); this.pre=null; }
+    const cache=this.photoCache(); for(const c of cache.values()) c.promise.then(im=>{ if(im) disposePhoto(im); });
+    cache.clear(); this.pchain=null;
   }
   play(){ if(!this.loaded) return;
     if(this.photo){ this.slidePlaying=true; this.slideNext=performance.now()+photoSecs*1000; this.barDirty=true; this.syncUI(); return; }
@@ -1060,7 +1088,9 @@ const getFile=n=>n.file? Promise.resolve(n.file) : n.handle.getFile();
 // (and converting it on the way) blocks the thread that draws every video, which froze them all.
 // 4096 px on the long side is still more than a screen in the headset can show; SBS keeps 2048 per eye.
 const PHOTO_MAX=4096;
+const PHOTO_AHEAD=2; // photos preloaded ahead on each screen (plus the previous one)
 async function decodeImage(e){
+  decodeImage.calls=(decodeImage.calls||0)+1;
   const file=await getFile(e);
   let bmp;
   try{ bmp=await createImageBitmap(file); }catch(err){ throw new Error('this image format can\'t be shown by the browser'); }
@@ -1848,7 +1878,7 @@ if(new URLSearchParams(location.search).has("test")) window.FourEyes={
   applyLayout, arrange, fitInView, layoutSpan, topAngle, visible, screenAngle, sizeTo,
   bendScreen, setUV, findBorders, raycastFrom, activate, swapScreens,
   openBrowser, closeBrowser, browserClick, refreshDir, drawPanel, gatherTree, shuffleAll, setSetting, stepPhotoSecs,
-  resetPrefs, PREFS_KEY, updateFocus, focus:{ get:()=>focusSlot, set:s=>{ focusSlot=focusCand=s; } },
+  resetPrefs, PREFS_KEY, decodeImage, PHOTO_AHEAD, updateFocus, focus:{ get:()=>focusSlot, set:s=>{ focusSlot=focusCand=s; } },
   layout:()=>layout, eyeY:()=>eyeY, setEye:v=>{ eyeY=v; needArrange=true; }, barButtons:()=>barButtons, photoSecs:()=>photoSecs,
 };
 })();
