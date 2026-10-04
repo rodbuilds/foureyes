@@ -58,6 +58,12 @@ async function startApp(browser, query, darkMode) {
   return {
     page, errors,
     run: (fn, ...args) => page.evaluate(fn, ...args),
+    // reload the page (local storage survives, as it would for a real visitor) and wait for it to start again
+    reload: async () => {
+      await page.reload({ waitUntil: 'load' });
+      await page.waitForFunction(() => !!window.FourEyes && document.querySelectorAll('.card').length === 4, { timeout: 30000 });
+      await page.evaluate(installHelpers);
+    },
     close: () => browser.close(),
   };
 }
