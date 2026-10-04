@@ -52,7 +52,7 @@ async function startApp(browser, query, darkMode) {
   await page.goto(APP_URL + (query ? '?' + query : ''), { waitUntil: 'load' });
   await page.waitForFunction(() => document.querySelectorAll('.card').length === 4, { timeout: 30000 });
   if (query.includes('test')) {
-    await page.waitForFunction(() => !!window.FourEyes, { timeout: 30000 });
+    await page.waitForFunction(() => !!window.FourEyes && !window.FourEyes.renderer.getContext().isContextLost(), { timeout: 30000 }); // graphics ready too: headless Chrome reports the context lost for the first moment
     await page.evaluate(installHelpers);
   }
   return {
@@ -61,10 +61,14 @@ async function startApp(browser, query, darkMode) {
     // reload the page (local storage survives, as it would for a real visitor) and wait for it to start again
     reload: async () => {
       await page.reload({ waitUntil: 'load' });
-      await page.waitForFunction(() => !!window.FourEyes && document.querySelectorAll('.card').length === 4, { timeout: 30000 });
+      await page.waitForFunction(() => !!window.FourEyes && document.querySelectorAll('.card').length === 4 && !window.FourEyes.renderer.getContext().isContextLost(), { timeout: 30000 });
       await page.evaluate(installHelpers);
     },
-    close: () => browser.close(),
+    // close Chrome, forcibly if it doesn't go within 5 s (a page stuck mid-load must not hang the test run)
+    close: async () => {
+      await Promise.race([browser.close().catch(() => {}), new Promise(r => setTimeout(r, 5000))]);
+      try { browser.process()?.kill('SIGKILL'); } catch {}
+    },
   };
 }
 
