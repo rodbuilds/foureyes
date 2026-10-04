@@ -26,7 +26,10 @@ nothing to install and no account, and your files never leave your computer.
   layout and options, so you never need to take the headset off.
 - **Playlists.** Picking a video makes the rest of its folder that screen's playlist. When a
   video ends, a screen can stop, play the next one, or shuffle the folder. PLAY ALL and
-  SHUFFLE start a whole folder.
+  SHUFFLE start a whole folder; **SHUFFLE ALL** also mixes in every subfolder, so one press
+  shuffles a whole collection. A **VIDEOS / PHOTOS** switch picks which of the two they play.
+  Photos are shuffled as **sets**: each folder plays in order, and the sets come in random order
+  (PREV / NEXT skip a whole set).
 - **Photo slideshows.** Any screen can show a folder of photos as a slideshow, with an
   adjustable time per photo.
 - **3D.** Side-by-side (SBS) and over/under (OU) videos and photos, full or half width, with a
@@ -137,6 +140,23 @@ One self-contained HTML file with no build step and no server. It uses
 [three.js](https://threejs.org/) (r128, loaded from a CDN) for rendering and WebXR, the
 browser's File System Access API for folder browsing, and the Gamepad API for the Xbox
 controller. Your added folders are remembered in the browser's IndexedDB.
+
+## Running the tests
+
+The tests open the app in headless Chrome and check layout, Fit all in view, curved screens, crop
+detection, the control bar, settings and the media browser (shuffles and photo sets). They use the
+Chrome already on your computer.
+
+```sh
+npm install
+npm test
+```
+
+If Chrome is somewhere unusual, point to it with `CHROME_PATH`. The tests open the page with
+`?test` in the address, which makes it share its internals with them; normal visits never do.
+They also run automatically on every pull request on GitHub.
+
+What they can't cover is the headset itself: how it looks and feels in VR is still checked by hand.
 
 ## License
 

@@ -4,3 +4,6 @@ desktop.ini
 .DS_Store
 .vscode/
 .idea/
+
+# test tooling
+node_modules/
