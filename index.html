@@ -841,8 +841,12 @@ function updateFocus(now){
   }
   // Looking at (or pointing at) a screen's control bar keeps that screen in focus: the bar sits below
   // the picture, outside the angle checked above, and zooming out under your gaze made it hard to use.
-  if(focusOn && gazeHit && gazeHit.kind==='bar' && gazeHit.slot) best=gazeHit.slot;
-  else if(focusOn && focusSlot && now-(focusSlot.lastBarLook||0)<600) best=focusSlot;
+  if(focusOn && !lib.open && gazeHit && gazeHit.kind==='bar' && gazeHit.slot) best=gazeHit.slot;
+  else if(focusOn && !lib.open && focusSlot && now-(focusSlot.lastBarLook||0)<600) best=focusSlot;
+  // While the media browser is open nothing stays zoomed, and focus lets go at once (no dwell), so a
+  // zoomed screen glides back instead of cutting through the browser. Opening FILES from a zoomed
+  // screen's bar used to keep it zoomed, because the bar counted as still in use.
+  if(lib.open){ focusCand=focusSlot=null; }
   if(best!==focusCand){ focusCand=best; focusSince=now; }
   if(now-focusSince>350) focusSlot=focusCand; // a short dwell, so glancing across doesn't pop every screen
   for(const s of visible()){
@@ -1843,7 +1847,7 @@ if(new URLSearchParams(location.search).has("test")) window.FourEyes={
   applyLayout, arrange, fitInView, layoutSpan, topAngle, visible, screenAngle, sizeTo,
   bendScreen, setUV, findBorders, raycastFrom, activate, swapScreens,
   openBrowser, closeBrowser, browserClick, refreshDir, drawPanel, gatherTree, shuffleAll, setSetting, stepPhotoSecs,
-  resetPrefs, PREFS_KEY,
+  resetPrefs, PREFS_KEY, updateFocus, focus:{ get:()=>focusSlot, set:s=>{ focusSlot=focusCand=s; } },
   layout:()=>layout, eyeY:()=>eyeY, setEye:v=>{ eyeY=v; needArrange=true; }, barButtons:()=>barButtons, photoSecs:()=>photoSecs,
 };
 })();
