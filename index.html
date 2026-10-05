@@ -1502,11 +1502,12 @@ function drawPanel(){
   const noFiles=settings || !lib.entries.some(isPlayable);
   // VIDEOS / PHOTOS: what the three play buttons play, chosen per screen (not used for scenes)
   const folders=!settings && lib.src!=='scenes', TB='700 30px '+DISP;
-  btn('kind','VIDEOS',1090,24,118,72,{data:'file',on:lib.kind==='file',dis:!folders,font:TB});
-  btn('kind','PHOTOS',1212,24,118,72,{data:'image',on:lib.kind==='image',dis:!folders,font:TB});
-  btn('playall','▶  PLAY ALL',1340,24,180,72,{dis:noFiles,font:TB});
-  btn('shuffleall','⤮  SHUFFLE',1530,24,180,72,{dis:noFiles,font:TB});
-  btn('shuffletree','⤮  SHUFFLE ALL',1720,24,210,72,{dis:!folders || gathering || (!lib.path.length && !lib.roots.length),font:TB});
+  btn('playall','▶  PLAY ALL',1090,24,180,72,{dis:noFiles,font:TB});
+  btn('shuffleall','⤮  SHUFFLE',1280,24,180,72,{dis:noFiles,font:TB});
+  btn('shuffletree','⤮  SHUFFLE ALL',1470,24,210,72,{dis:!folders || gathering || (!lib.path.length && !lib.roots.length),font:TB});
+  // what PLAY ALL / SHUFFLE / SHUFFLE ALL play from your folders (per screen)
+  btn('kind','VIDEOS',1690,24,118,72,{data:'file',on:lib.kind==='file',dis:!folders,font:TB});
+  btn('kind','PHOTOS',1812,24,118,72,{data:'image',on:lib.kind==='image',dis:!folders,font:TB});
   btn('close','✕',1940,24,84,72);
 
   // sidebar
