@@ -57,6 +57,20 @@ test('folders are added by path or with the picker, and removed', async () => {
   assert.deepEqual(loadConfig(cfg.dir).data.folders.map(f => f.name), ['Picked'], 'saved to disk');
 });
 
+test('only one folder picker opens at a time', async () => {
+  let finish;
+  picked = new Promise(r => { finish = r; }); // the picker stays open until finish()
+  const first = call('/api/folders/browse', { body: {} });
+  await new Promise(r => setTimeout(r, 50));
+  const second = await call('/api/folders/browse', { body: {} });
+  assert.equal(second.status, 409);
+  assert.match((await second.json()).error, /already open/);
+  finish('');
+  assert.equal((await first).status, 200);
+  picked = '';
+  assert.equal((await call('/api/folders/browse', { body: {} })).status, 200, 'and it can open again once closed');
+});
+
 test('changes without the panel\'s header, or from another site, are refused', async () => {
   const noHeader = await fetch(`http://127.0.0.1:${port}/api/folders/add`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ path: tmp }) });
   assert.equal(noHeader.status, 404);

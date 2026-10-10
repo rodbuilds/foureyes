@@ -6,22 +6,73 @@ import http from 'node:http';
 import qrcode from 'qrcode-generator';
 import { fingerprint } from './cert.mjs';
 
+// Windows: the standard folder picker (the Explorer-style one, with Quick Access and an address bar),
+// through its COM interface (IFileOpenDialog with FOS_PICKFOLDERS) from PowerShell.
+//
+// The dialog has to come up in front of the browser, but Windows won't let a background program
+// take the foreground. So it is owned by a tiny, always-on-top window that is actually shown (off
+// screen): a dialog owned by an always-on-top window is always on top too.
+const WIN_PICKER = String.raw`
+[Console]::OutputEncoding = [Text.Encoding]::UTF8
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public static class FolderPicker {
+  [ComImport, Guid("DC1C5A9C-E88A-4dde-A5A1-60F82A20AEF7")] class FileOpenDialog {}
+  [ComImport, Guid("43826D1E-E718-42EE-BC55-A1E261C37BFE"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+  interface IShellItem {
+    void BindToHandler(IntPtr pbc, ref Guid bhid, ref Guid riid, out IntPtr ppv);
+    void GetParent(out IShellItem ppsi);
+    void GetDisplayName(uint sigdnName, [MarshalAs(UnmanagedType.LPWStr)] out string ppszName);
+  }
+  // IFileOpenDialog, as far as GetResult (the methods must be declared in vtable order)
+  [ComImport, Guid("d57c7288-d4ad-4768-be02-9d969532d960"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+  interface IFileOpenDialog {
+    [PreserveSig] int Show(IntPtr parent);
+    void SetFileTypes(uint c, IntPtr specs); void SetFileTypeIndex(uint i); void GetFileTypeIndex(out uint i);
+    void Advise(IntPtr events, out uint cookie); void Unadvise(uint cookie);
+    void SetOptions(uint fos); void GetOptions(out uint fos);
+    void SetDefaultFolder(IShellItem si); void SetFolder(IShellItem si); void GetFolder(out IShellItem si);
+    void GetCurrentSelection(out IShellItem si);
+    void SetFileName([MarshalAs(UnmanagedType.LPWStr)] string name); void GetFileName([MarshalAs(UnmanagedType.LPWStr)] out string name);
+    void SetTitle([MarshalAs(UnmanagedType.LPWStr)] string title); void SetOkButtonLabel([MarshalAs(UnmanagedType.LPWStr)] string text);
+    void SetFileNameLabel([MarshalAs(UnmanagedType.LPWStr)] string label);
+    void GetResult(out IShellItem si);
+  }
+  const uint FOS_PICKFOLDERS = 0x20, FOS_FORCEFILESYSTEM = 0x40, FOS_PATHMUSTEXIST = 0x800;
+  const uint SIGDN_FILESYSPATH = 0x80058000;
+  public static string Pick(IntPtr owner, string title) {
+    var d = (IFileOpenDialog)new FileOpenDialog();
+    uint o; d.GetOptions(out o);
+    d.SetOptions(o | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST);
+    d.SetTitle(title); d.SetOkButtonLabel("Share this folder");
+    if (d.Show(owner) != 0) return "";  // cancelled (or failed)
+    IShellItem si; d.GetResult(out si);
+    string path; si.GetDisplayName(SIGDN_FILESYSPATH, out path);
+    return path;
+  }
+}
+"@
+$o = New-Object System.Windows.Forms.Form -Property @{
+  TopMost = $true; ShowInTaskbar = $false; FormBorderStyle = 'None'; StartPosition = 'Manual'
+  Location = New-Object System.Drawing.Point(-32000, -32000); Size = New-Object System.Drawing.Size(1, 1)
+}
+$o.Show(); $o.Activate()
+[FolderPicker]::Pick($o.Handle, 'Choose a folder of videos or photos to share with your headset')
+$o.Close()
+`;
+
 // Ask for a folder with the system's own folder picker. Resolves to a path, or '' if cancelled.
 export function pickFolder() {
   const run = (cmd, args) => new Promise((resolve, reject) => {
-    execFile(cmd, args, { windowsHide: true, encoding: 'utf8', maxBuffer: 1 << 20 }, (err, out) => err ? reject(err) : resolve(out.trim()));
+    // no windowsHide: it would also hide the dialog; PowerShell shares this app's console, so no window flashes
+    execFile(cmd, args, { encoding: 'utf8', maxBuffer: 1 << 20 }, (err, out) => err ? reject(err) : resolve(out.trim()));
   });
   if (process.platform === 'win32') {
-    const ps = [
-      '[Console]::OutputEncoding=[Text.Encoding]::UTF8',
-      'Add-Type -AssemblyName System.Windows.Forms',
-      '$d=New-Object System.Windows.Forms.FolderBrowserDialog',
-      "$d.Description='Choose a folder of videos or photos to share with your headset'",
-      '$d.ShowNewFolderButton=$false',
-      '$o=New-Object System.Windows.Forms.Form -Property @{TopMost=$true}',
-      "if($d.ShowDialog($o) -eq 'OK'){ $d.SelectedPath }",
-    ].join('; ');
-    return run('powershell.exe', ['-NoProfile', '-STA', '-NonInteractive', '-Command', ps]);
+    // passed encoded (UTF-16LE, base64) so nothing in the script needs quoting
+    return run('powershell.exe', ['-NoProfile', '-STA', '-NonInteractive',
+      '-EncodedCommand', Buffer.from(WIN_PICKER, 'utf16le').toString('base64')]);
   }
   if (process.platform === 'darwin') {
     return run('osascript', ['-e', 'POSIX path of (choose folder with prompt "Choose a folder of videos or photos to share with your headset")'])
@@ -55,6 +106,7 @@ async function readJson(req) {
 
 export function createControlHandler(cfg, { urls, port, onQuit = () => {}, pick = pickFolder, log = () => {} }) {
   const hosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
+  let picking = false;
   return async function handle(req, res) {
     const json = (status, obj) => {
       res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
@@ -79,7 +131,15 @@ export function createControlHandler(cfg, { urls, port, onQuit = () => {}, pick 
       const body = await readJson(req);
       switch (url.pathname) {
         case '/api/folders/add': cfg.addFolder(String(body.path || '')); break;
-        case '/api/folders/browse': { const p = await pick(); if (p) cfg.addFolder(p); break; }
+        case '/api/folders/browse': {
+          // one picker at a time: more clicks while it's open would only stack up more windows
+          if (picking) { json(409, { error: 'The folder window is already open on this PC. Choose a folder there, or cancel it.' }); return; }
+          picking = true;
+          let p;
+          try { p = await pick(); } finally { picking = false; }
+          if (p) cfg.addFolder(p);
+          break;
+        }
         case '/api/folders/remove': cfg.removeFolder(String(body.id || '')); break;
         case '/api/devices/forget': cfg.forgetDevices(); log('forgot all paired devices; new pairing code made'); break;
         case '/api/quit': json(200, state(cfg, urls)); onQuit(); return;
@@ -195,7 +255,10 @@ function show(s){
   $('devices').textContent=s.devices; $('fp').textContent=s.fingerprint; $('cfg').textContent=s.configFile;
 }
 async function act(path,body){ $('err').textContent=''; try{ show(await call(path,body)); }catch(e){ $('err').textContent=e.message; } }
-$('browse').onclick=()=>act('/api/folders/browse',{});
+$('browse').onclick=async()=>{
+  const b=$('browse'); b.disabled=true; b.textContent='Choose a folder in the window that opened…';
+  try{ await act('/api/folders/browse',{}); } finally { b.disabled=false; b.textContent='Add folder…'; }
+};
 $('add').onclick=()=>{ const p=$('path').value.trim(); if(p) act('/api/folders/add',{path:p}).then(()=>{ if(!$('err').textContent) $('path').value=''; }); };
 $('path').onkeydown=e=>{ if(e.key==='Enter') $('add').click(); };
 $('forget').onclick=()=>{ if(confirm('Unpair every device? They will need the new pairing code to connect again.')) act('/api/devices/forget',{}); };
