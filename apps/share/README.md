@@ -9,6 +9,12 @@ opens it over Wi-Fi. In Four Eyes, those folders appear in the media browser as 
 (marked `PC ·`). Browsing, PLAY ALL, SHUFFLE, **SHUFFLE ALL**, photo sets, LATEST sorting and
 thumbnails all work as they do with local folders.
 
+## Getting it
+
+Download `four-eyes-share-<version>.exe` from the repository's **Releases** page. Releases are built
+by GitHub Actions whenever a `share-v…` tag is pushed (see `.github/workflows/share-release.yml`).
+Or build it yourself with `npm run build:share`.
+
 ## Using it
 
 1. Run `four-eyes-share.exe`. A console window shows the address and pairing code, and the

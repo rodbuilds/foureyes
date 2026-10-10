@@ -1,0 +1,44 @@
+# Builds Four Eyes Share for Windows and puts it on the Releases page, when a tag like
+# share-v0.1.0 is pushed:
+#
+#   git tag share-v0.1.0
+#   git push origin share-v0.1.0
+#
+# Tags with a hyphen after the version (share-v0.1.0-beta.1) are marked as pre-releases.
+name: Four Eyes Share release
+
+on:
+  push:
+    tags: ['share-v*']
+
+permissions:
+  contents: write # to create the release
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run test:share
+      - run: npm run build:share
+      - name: Create the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          version="${TAG#share-v}"
+          cp apps/share/dist/four-eyes-share.exe "four-eyes-share-$version.exe"
+          sha256sum "four-eyes-share-$version.exe" > "four-eyes-share-$version.exe.sha256"
+          pre=""; [[ "$version" == *-* ]] && pre="--prerelease"
+          gh release create "$TAG" "four-eyes-share-$version.exe" "four-eyes-share-$version.exe.sha256" $pre \
+            --title "Four Eyes Share $version" \
+            --notes "Four Eyes Share for Windows: watch this PC's videos and photos in Four Eyes on a Quest, over your home Wi-Fi. See [apps/share/README.md](https://github.com/${{ github.repository }}/blob/$TAG/apps/share/README.md) for how to use it.
+
+          It is unsigned, so Windows SmartScreen may warn the first time it runs (More info → Run anyway). The .sha256 file lets you check the download."
