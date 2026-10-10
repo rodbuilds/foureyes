@@ -1,14 +1,14 @@
-# Publishes Four Eyes (apps/web) to GitHub Pages at the same address as before,
-# https://rodbuilds.github.io/foureyes/, now that index.html lives in apps/web rather than the root.
+# Publishes Four Eyes to GitHub Pages at https://rodbuilds.github.io/foureyes/.
+# The page is apps/web/index.html in the monorepo layout, or index.html at the root before it; either
+# works, so this file is right on both sides of that move.
 #
-# Needs one setting, once: Settings → Pages → Build and deployment → Source: "GitHub Actions"
-# (instead of "Deploy from a branch").
+# Needs Settings → Pages → Build and deployment → Source: "GitHub Actions" (set).
 name: Pages
 
 on:
   push:
     branches: [main]
-    paths: ['apps/web/index.html', '.github/workflows/pages.yml']
+    paths: ['index.html', 'apps/web/index.html', '.github/workflows/pages.yml']
   workflow_dispatch:
 
 permissions:
@@ -29,7 +29,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       # only the page itself (and the licence): not the tests or the companion app
-      - run: mkdir site && cp apps/web/index.html LICENSE site/
+      - run: |
+          mkdir site
+          if [ -f apps/web/index.html ]; then cp apps/web/index.html site/; else cp index.html site/; fi
+          cp LICENSE site/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
