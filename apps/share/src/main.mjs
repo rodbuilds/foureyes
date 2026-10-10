@@ -105,7 +105,7 @@ async function main() {
   Four Eyes Share is running.
 
   Control panel (this PC only):  ${panel}   (run Four Eyes Share again to reopen it)
-  On your Quest, go to:          ${first ? first.replace('https://', '') : '(no network connection found)'}
+  On your Quest, go to:          ${first || '(no network connection found)'}   (type it in the address bar at the top, with https://)
   Pairing code:                  ${spaced(cfg.data.pairCode)}   (each code pairs one device; the panel shows the next)
   Certificate fingerprint:       ${fingerprint(cfg.data.tls.cert)}
 

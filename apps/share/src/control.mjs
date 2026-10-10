@@ -69,8 +69,9 @@ export function qrSvg(text) {
 function state(cfg, urls) {
   const base = urls();
   return {
-    // the QR code opens the pairing link directly, so a scanned code needs no typing
-    addresses: base, code: cfg.data.pairCode, qr: base.length ? qrSvg(base[0] + '/pair/' + cfg.data.pairCode) : '',
+    // The QR code is just the address, for checking from a phone that this PC can be reached. It
+    // doesn't carry the pairing code, so scanning it doesn't pair the phone or use up the code.
+    addresses: base, code: cfg.data.pairCode, qr: base.length ? qrSvg(base[0]) : '',
     folders: cfg.data.folders, devices: cfg.data.devices.length,
     fingerprint: cfg.data.tls ? fingerprint(cfg.data.tls.cert) : '', configFile: cfg.file,
   };
@@ -147,6 +148,9 @@ h1{margin:0 0 4px;font-size:28px}h2{font-size:18px;margin:0 0 8px}
 .qr svg{width:200px;height:200px;background:#fff;border-radius:6px}
 .big{font:600 22px/1.3 ui-monospace,Consolas,monospace;word-break:break-all;margin:4px 0 10px}
 .code{font:700 56px/1.1 ui-monospace,Consolas,monospace;letter-spacing:.12em;margin:4px 0 6px}
+.addrrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:4px 0 6px}.addrrow .big{margin:0}
+.help{grid-column:1/-1;border-top:1px solid var(--line);padding-top:10px}.help h3{font-size:16px;margin:0 0 4px}.help p{margin:4px 0}
+.qr p{margin:6px 0 0;text-align:center}
 .ok{color:#3fb950;font-weight:600}
 ol{padding-left:20px;margin:6px 0}
 ul.folders{list-style:none;margin:0 0 12px;padding:0}
@@ -177,17 +181,22 @@ button:disabled{opacity:.5;cursor:default}
     <h2>Connect your Quest</h2>
     <ol>
       <li>Put the Quest on the same Wi-Fi as this PC and open <b>Quest Browser</b>.</li>
-      <li>Go to:
-        <div class="big" id="addr">…</div></li>
+      <li>Tap the <b>address bar at the very top</b> of the browser (not the search box in the middle of the start page), type this address <b>exactly</b>, including <b>https://</b> and the number after the colon, and press <b>Go</b>:
+        <div class="addrrow"><span class="big" id="addr">…</span><button id="copy" title="Copy the address">Copy</button></div>
+        <span class="mute">If it turns into a web search instead, send yourself the address in a message (email, Messenger, Discord…), open it on the Quest and tap the link.</span></li>
       <li>The browser warns that the connection isn't private, because this PC made its own certificate. Choose <b>Advanced</b>, then <b>Proceed</b>.</li>
       <li>Type this pairing code:
         <div class="code" id="code">…</div>
         <span class="mute">Each code works once: after a device pairs, a new one appears here.</span> <span class="ok" id="paired"></span></li>
-      <li>Four Eyes opens. Your folders are under <b>PC Share</b> in the media browser. Next time just go to the address; the Quest stays paired.</li>
+      <li>Four Eyes opens. Your folders are under <b>PC Share</b> in the media browser. Next time just go to the address (bookmark it); the Quest stays paired.</li>
     </ol>
+  </div>
+  <div class="qr"><div id="qr"></div><p class="mute">Scan with a phone to open the address there.</p></div>
+  <div class="help">
+    <h3>Not working? Check with your phone first</h3>
+    <p>Scan the code above with a phone on the same Wi-Fi (or type the address into its browser). If the phone shows a warning and then a page asking for a pairing code, this PC is set up right, and the problem is on the Quest: check the address is in the address bar at the top, exactly as shown. If the phone can't reach it either, try the other addresses below, and make sure Windows allowed Four Eyes Share through the firewall on private networks.</p>
     <p class="mute" id="others"></p>
   </div>
-  <div class="qr" id="qr"></div>
 </section>
 
 <section class="card">
@@ -219,13 +228,14 @@ async function call(path,body){
   const r=await fetch(path,body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json','X-Four-Eyes-Share':'1'},body:JSON.stringify(body)});
   const j=await r.json(); if(!r.ok) throw new Error(j.error||('HTTP '+r.status)); return j;
 }
-// addresses without "https://": the server answers plain http on the same port with a redirect
-const short=u=>u.replace('https://','');
+// Addresses are shown whole, with "https://": Quest Browser treats "192.168.1.20:8443" alone as a search.
 let lastDevices=null;
 function show(s){
-  $('addr').textContent=s.addresses.length? short(s.addresses[0]) : 'No network connection found. Connect this PC to your Wi-Fi.';
+  $('addr').textContent=s.addresses.length? s.addresses[0] : 'No network connection found. Connect this PC to your Wi-Fi.';
+  $('copy').hidden=!s.addresses.length;
   $('code').textContent=s.code.slice(0,3)+' '+s.code.slice(3);
-  $('others').textContent=s.addresses.length>1?'Other addresses for this PC, if that one doesn\\'t work: '+s.addresses.slice(1).map(short).join('   '):'';
+  $('others').textContent=s.addresses.length>1?'Other addresses for this PC, if that one doesn\\'t work: '+s.addresses.slice(1).join('   ')
+    : s.addresses.length? 'This PC has no other network addresses to try.' : '';
   if(lastDevices!=null && s.devices>lastDevices) $('paired').textContent='✓ A device just paired.';
   lastDevices=s.devices;
   $('qr').innerHTML=s.qr;
@@ -267,6 +277,12 @@ async function browseTo(path){
     list.scrollTop=0; const first=list.querySelector('button'); if(first) first.focus();
   }catch(e){ $('err').textContent=e.message; }
 }
+$('copy').onclick=async()=>{
+  const b=$('copy');
+  try{ await navigator.clipboard.writeText($('addr').textContent); b.textContent='Copied ✓'; }
+  catch(e){ getSelection().selectAllChildren($('addr')); b.textContent='Press Ctrl+C'; } // selected, to copy by hand
+  setTimeout(()=>{ b.textContent='Copy'; },2500);
+};
 $('browse').onclick=()=>{ $('picker').hidden=false; browseTo(null); };
 $('pclose').onclick=()=>{ $('picker').hidden=true; };
 $('pup').onclick=()=>browseTo(here && here.parent!=null? here.parent : null);

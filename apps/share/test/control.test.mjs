@@ -40,6 +40,13 @@ test('the panel and its state are served, with the pairing code and a QR code', 
   assert.match(s.code, /^\d{6}$/);
   assert.equal(s.code, cfg.data.pairCode);
   assert.match(s.qr, /^<svg/);
+  assert.equal(s.qr, qrSvg('https://192.168.1.20:8443'), 'the QR code is the address alone: scanning it doesn\'t pair or use up the code');
+  // the guidance that keeps a first-time Quest user out of the search box
+  const html = await page.text();
+  assert.match(html, /address bar at the very top/);
+  assert.match(html, /id="copy"/);
+  assert.match(html, /Check with your phone first/);
+  assert.doesNotMatch(html, /replace\('https:\/\/'/, 'addresses are shown with https://');
   assert.match(s.fingerprint, /^([0-9A-F]{2}:){31}[0-9A-F]{2}$/);
 });
 

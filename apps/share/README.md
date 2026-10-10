@@ -23,16 +23,24 @@ Or build it yourself with `npm run build:share`.
    copy's panel instead.
 2. Click **Add folder…**, open folders until you're in one with your videos or photos (it shows how
    many each folder holds), and click **Share this folder**. Or paste a path. Folders are remembered.
-3. On the Quest, open **Quest Browser** and go to the address the panel shows, for example
-   `192.168.1.20:8443`. You don't need to type `https://`.
+3. On the Quest, open **Quest Browser**, tap the **address bar at the very top** (not the search box
+   in the middle of the start page), and type the address the panel shows exactly, including
+   `https://` and the port, for example `https://192.168.1.20:8443`. Without `https://`, Quest Browser
+   treats it as a web search. If typing it keeps going wrong, use the panel's **Copy** button, send
+   the address to yourself in a message, and tap the link on the Quest.
 4. The Quest warns that the connection isn't private. Choose **Advanced → Proceed**. You only do this
    once (see [the certificate](#the-certificate)).
 5. Type the **6-digit pairing code** from the panel, for example `441 388`. Each code pairs one device,
    and the panel shows a new one straight after.
 6. Four Eyes opens. Press **Enter VR** and open the media browser. Your folders are listed under Places.
 
-The next time, just go to the address (bookmark it). The Quest stays paired. The panel's QR code is
-a pairing link with the code built in, for a phone or tablet.
+The next time, just go to the address (bookmark it). The Quest stays paired.
+
+**Not working?** Check with a phone first: scan the panel's QR code (it's just the address, so it
+doesn't pair the phone or use up the code). If the phone shows the warning and then the pairing-code
+page, the PC side works and the problem is on the Quest, usually the address typed into the search
+box. If the phone can't reach it either, try the panel's other addresses, and check that Windows
+allowed the app through the firewall on private networks.
 
 Windows asks once whether to let the app through the firewall. Allow **private networks**, which is
 your home Wi-Fi.
