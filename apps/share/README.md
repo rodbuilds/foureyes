@@ -87,7 +87,8 @@ How it's put together:
 | File | What it does |
 |---|---|
 | `src/main.mjs` | Command line, starts both servers, prints the addresses |
-| `src/server.mjs` | The HTTPS server the headset uses: pairing, `/api/share`, `/api/list`, `/api/latest`, `/media/…` with range requests |
+| `src/server.mjs` | The HTTPS server the headset uses: pairing, `/api/share`, `/api/list`, `/api/latest`, `/api/keyframes`, `/media/…` with range requests |
+| `src/keyframes.mjs` | Reads an MP4's keyframe times from its index, so seeks can land on a keyframe (see below) |
 | `src/control.mjs` | The local control panel, including its folder browser |
 | `src/cert.mjs` | The self-signed certificate, built with Node's own crypto (no OpenSSL, no libraries) |
 | `src/config.mjs` | Settings file, folders, pairing and devices |
@@ -96,6 +97,18 @@ How it's put together:
 
 The only runtime dependency is `qrcode-generator` (MIT, no dependencies of its own), for the QR code.
 three.js and the Barlow fonts come from npm at build time and are packaged into the executable.
+
+### Seeking lands on keyframes
+
+A video can only start decoding at a keyframe. A jump to any other point makes the player fetch and
+decode everything from the keyframe before it, often up to 10 s of video, which on a headset over
+Wi-Fi is slow and can look like fast-forwarding. So for MP4s from PC Share, the page asks the server
+where the keyframes are (`/api/keyframes`, read from the file's index in a few milliseconds and
+cached) and every seek lands on one. Backward jumps go to the keyframe at or before the target.
+Forward jumps do the same, unless that wouldn't move forward, in which case they go to the next
+keyframe. The cost is that a jump can land a few seconds before the point you picked. On a 4K file
+on a fast PC, this took seeks from 589 ms on average (worst 1,037 ms) to 278 ms. Other formats, and
+fragmented MP4s, seek exactly as before.
 
 ### Known rough edges
 

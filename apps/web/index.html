@@ -518,18 +518,21 @@ class Slot{
     this.leavePhoto(); this.crop={...NO_CROP}; this.skipTok=(this.skipTok||0)+1;
     if(!keepList){ this.list=null; this.sets=null; }
     if(this.url) URL.revokeObjectURL(this.url);
-    this.url=URL.createObjectURL(f); this.name=f.name; this.loaded=false;
+    this.url=URL.createObjectURL(f); this.name=f.name; this.loaded=false; this.keyframes=null;
     this.video.src=this.url; this.video.load(); this.syncUI();
   }
   // a video from PC Share, streamed from the PC (keeps the playlist, like loadFile from a folder)
   loadShared(e){
-    this.leavePhoto(); this.crop={...NO_CROP}; this.skipTok=(this.skipTok||0)+1;
+    this.leavePhoto(); this.crop={...NO_CROP}; const tok=this.skipTok=(this.skipTok||0)+1;
     if(this.url){ URL.revokeObjectURL(this.url); this.url=null; }
-    this.name=e.name; this.loaded=false;
+    this.name=e.name; this.loaded=false; this.keyframes=null;
     this.video.src=e.url; this.video.load(); this.syncUI();
+    // where its keyframes are, so seeks can land on one (see snapToKeyframe); until then seeks are exact
+    if(e.remote) shareGet('api/keyframes?path='+encodeURIComponent(e.remote))
+      .then(j=>{ if(this.skipTok===tok) this.keyframes=j.times; }).catch(()=>{});
   }
   loadURL(u){
-    this.list=null; this.sets=null; this.name=u.split('/').pop().split('?')[0]||u; this.loaded=false;
+    this.list=null; this.sets=null; this.name=u.split('/').pop().split('?')[0]||u; this.loaded=false; this.keyframes=null;
     this.leavePhoto(); this.crop={...NO_CROP}; this.skipTok=(this.skipTok||0)+1;
     this.video.crossOrigin='anonymous'; this.video.src=u; this.video.load(); this.syncUI();
   }
@@ -639,7 +642,13 @@ class Slot{
   play(){ if(!this.loaded) return;
     if(this.photo){ this.slidePlaying=true; this.slideNext=performance.now()+photoSecs*1000; this.barDirty=true; this.syncUI(); return; }
     this.video.play().catch(()=>setStatus('The browser blocked playback. Press play once on the page, then it will work in VR too.')); }
-  seek(t){ if(!this.loaded || this.photo) return; const d=this.video.duration||0; this.video.currentTime=Math.max(0,Math.min(d-0.1,t)); this.barDirty=true; }
+  seek(t){
+    if(!this.loaded || this.photo) return;
+    const v=this.video, d=v.duration||0;
+    t=Math.max(0,Math.min(d-0.1,t));
+    if(this.keyframes) t=snapToKeyframe(this.keyframes,t,v.currentTime);
+    v.currentTime=t; this.barDirty=true;
+  }
   vol(dv){ if(this.photo){ stepPhotoSecs(dv>0?1:-1); return; } const v=this.video; v.volume=Math.max(0,Math.min(1,+(v.volume+dv).toFixed(2))); if(v.volume>0) v.muted=false; this.flashMsg('Volume '+Math.round(v.volume*100)+'%'); }
   solo(){ slots.forEach(s=>s.video.muted = s!==this); }
   resize(f){ sizeTo(this,this.scale*f); }
@@ -1110,7 +1119,7 @@ async function listDir(d){
     for(const c of j.entries){
       const remote=d.remote+'/'+c.name, key=d.key+'/'+c.name;
       if(c.kind==='dir') out.push({name:c.name,kind:'dir',remote,key});
-      else if(c.kind==='file'||c.kind==='image') out.push({name:c.name,kind:c.kind,url:shareMediaUrl(remote),mtime:c.mtime,key});
+      else if(c.kind==='file'||c.kind==='image') out.push({name:c.name,kind:c.kind,url:shareMediaUrl(remote),remote,mtime:c.mtime,key});
     }
   } else for(const c of d.vdir.values()) out.push({...c,key:d.key+'/'+c.name});
   return out.sort(byName);
@@ -1133,6 +1142,20 @@ async function shareGet(path){
   return body;
 }
 const shareMediaUrl=remote=>'media/'+remote.split('/').map(encodeURIComponent).join('/');
+// Where a seek lands in a PC Share video. A video only starts decoding at a keyframe, so a jump to any
+// other point makes the headset fetch and decode everything from the keyframe before it first (up to
+// 10 s of video in many files), which over Wi-Fi looks like fast-forwarding. So jumps land on a
+// keyframe (kf: their times, ascending): the one at or before t, unless that wouldn't move a forward
+// jump forward, in which case the next one ahead. Lands KF_NUDGE after it, so rounding can't put the
+// jump just before it, which would mean the keyframe before.
+const KF_NUDGE=0.04;
+function snapToKeyframe(kf,t,cur){
+  let lo=0, hi=kf.length-1, i=-1;
+  while(lo<=hi){ const m=(lo+hi)>>1; if(kf[m]<=t+0.001){ i=m; lo=m+1; } else hi=m-1; }
+  let k= i>=0? kf[i] : 0;
+  if(t>cur && k<=cur+0.25){ if(i+1>=kf.length) return t; k=kf[i+1]; } // forward: never land behind where we are
+  return k+KF_NUDGE;
+}
 const shareStatusEl=document.getElementById('shareStatus');
 // (re)read the shared folders; they replace any earlier PC Share roots, keeping the rest
 async function loadShareRoots(){
@@ -1996,7 +2019,7 @@ if(new URLSearchParams(location.search).has("test")) window.FourEyes={
   applyLayout, arrange, fitInView, layoutSpan, topAngle, visible, screenAngle, sizeTo,
   bendScreen, setUV, findBorders, raycastFrom, activate, swapScreens,
   openBrowser, closeBrowser, browserClick, refreshDir, drawPanel, gatherTree, shuffleAll, setSetting, stepPhotoSecs,
-  resetPrefs, PREFS_KEY, refreshLibrary, loadShareRoots, SHARE, thumbs, renderer, photoTexture, uploads, UPLOAD_ROWS, decodeImage, PHOTO_AHEAD, updateFocus, focus:{ get:()=>focusSlot, set:s=>{ focusSlot=focusCand=s; } },
+  resetPrefs, PREFS_KEY, refreshLibrary, loadShareRoots, SHARE, thumbs, snapToKeyframe, renderer, photoTexture, uploads, UPLOAD_ROWS, decodeImage, PHOTO_AHEAD, updateFocus, focus:{ get:()=>focusSlot, set:s=>{ focusSlot=focusCand=s; } },
   layout:()=>layout, eyeY:()=>eyeY, setEye:v=>{ eyeY=v; needArrange=true; }, barButtons:()=>barButtons, photoSecs:()=>photoSecs,
 };
 })();

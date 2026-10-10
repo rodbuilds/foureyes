@@ -14,6 +14,7 @@ import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
+import { keyframes } from './keyframes.mjs';
 
 export const VIDEO_EXT = /\.(mp4|m4v|webm|mkv|mov|ogv)$/i;
 export const IMAGE_EXT = /\.(jpe?g|png|webp|gif|bmp|avif|jps)$/i;
@@ -225,6 +226,13 @@ export function createShareHandler(cfg, assets, { log = () => {} } = {}) {
         let entries;
         try { entries = await listFolder(abs, root); } catch { throw new HttpError(404, 'Couldn\'t read this folder.'); }
         sendJson(res, 200, { entries }); return;
+      }
+      if (p === '/api/keyframes') { // where a video's keyframes are, so the page can jump straight to one
+        const { abs } = await resolveShared(cfg.data.folders, url.searchParams.get('path'));
+        if (!kindOf(abs)) throw new HttpError(404, 'Not found.');
+        let times = null;
+        try { times = await keyframes(abs); } catch { /* unreadable: the page just seeks normally */ }
+        sendJson(res, 200, { times }); return;
       }
       if (p === '/api/latest') {
         const { abs } = await resolveShared(cfg.data.folders, url.searchParams.get('path'));

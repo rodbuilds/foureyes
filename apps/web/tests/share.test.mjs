@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import zlib from 'node:zlib';
+import { execFileSync } from 'node:child_process';
 import { openApp } from './helpers.mjs';
 import { makeCertificate } from '../../share/src/cert.mjs';
 import { loadConfig } from '../../share/src/config.mjs';
@@ -183,6 +184,47 @@ test('↻ picks up folders shared on the PC since the page opened', async () => 
     return F.lib.roots.filter(r => r.share).map(r => r.name);
   });
   assert.deepEqual(r, ['Media', 'More']);
+});
+
+test('jumps land on a keyframe: back to the one before, forward never behind where you are', async () => {
+  const r = await app.run(() => {
+    const snap = window.FourEyes.snapToKeyframe, kf = [0, 10, 20, 30];
+    return {
+      back: snap(kf, 15, 25),          // back 10 s from 25: the keyframe before 15
+      fwd: snap(kf, 15, 5),            // forward from 5 to 15: the keyframe at 10, still ahead
+      fwdShort: snap(kf, 17, 12),      // forward from 12 to 17: 10 is behind, so the next one, 20
+      pastLast: snap(kf, 40, 32),      // past the last keyframe: exactly where asked
+      start: snap(kf, 0, 12),
+      onOne: snap(kf, 20, 5),          // exactly on a keyframe
+    };
+  });
+  assert.deepEqual(r, { back: 10.04, fwd: 10.04, fwdShort: 20.04, pastLast: 40, start: 0.04, onOne: 20.04 });
+});
+
+const hasFfmpeg = (() => { try { execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' }); return true; } catch { return false; } })();
+
+test('a PC Share MP4 gets its keyframes from the PC, and seeks land on them', { skip: !hasFfmpeg && 'ffmpeg not installed' }, async () => {
+  // 30 s, a keyframe every 5 s, in its own shared folder
+  const dir = path.join(tmp, 'Long'); fs.mkdirSync(dir);
+  execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc=size=320x180:rate=25:duration=30',
+    '-c:v', 'libx264', '-profile:v', 'baseline', '-g', '125', '-keyint_min', '125', '-sc_threshold', '0', '-pix_fmt', 'yuv420p',
+    '-movflags', '+faststart', path.join(dir, 'long.mp4')]);
+  cfg.addFolder(dir);
+  const r = await app.run(async () => {
+    const F = window.FourEyes, s = F.slots[2];
+    await F.loadShareRoots();
+    const files = (await go('Long')).filter(e => e.kind === 'file');
+    s.setList(files, 0); s.next(0);
+    await waitFor(() => s.loaded && s.keyframes);
+    const kf = s.keyframes.slice();
+    const v = s.video, seeked = () => new Promise(res => v.addEventListener('seeked', res, { once: true }));
+    let done = seeked(); s.seek(17); await done; const afterFwd = v.currentTime;     // forward from 0 to 17
+    done = seeked(); s.seek(v.currentTime - 10); await done; const afterBack = v.currentTime; // back 10 s from 15
+    return { kf, afterFwd, afterBack };
+  });
+  assert.deepEqual(r.kf, [0, 5, 10, 15, 20, 25]);
+  assert.ok(Math.abs(r.afterFwd - 15.04) < 0.01, 'forward to 17 lands on the keyframe at 15: ' + r.afterFwd);
+  assert.ok(Math.abs(r.afterBack - 5.04) < 0.01, 'back 10 s from 15 lands on the keyframe at 5: ' + r.afterBack);
 });
 
 test('nothing is requested from anywhere but the PC, and the page has no errors', async () => {
