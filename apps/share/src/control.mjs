@@ -1,84 +1,62 @@
 // The control panel: a small page on this PC only (127.0.0.1) where the user picks the folders to
 // share, sees the address and pairing code for the Quest (and a QR code), and can forget paired
 // devices. It is never reachable from the network.
-import { execFile } from 'node:child_process';
+import fs from 'node:fs';
+import fsp from 'node:fs/promises';
 import http from 'node:http';
+import os from 'node:os';
+import path from 'node:path';
 import qrcode from 'qrcode-generator';
 import { fingerprint } from './cert.mjs';
+import { VIDEO_EXT, IMAGE_EXT, hiddenName } from './server.mjs';
 
-// Windows: the standard folder picker (the Explorer-style one, with Quick Access and an address bar),
-// through its COM interface (IFileOpenDialog with FOS_PICKFOLDERS) from PowerShell.
-//
-// The dialog has to come up in front of the browser, but Windows won't let a background program
-// take the foreground. So it is owned by a tiny, always-on-top window that is actually shown (off
-// screen): a dialog owned by an always-on-top window is always on top too.
-const WIN_PICKER = String.raw`
-[Console]::OutputEncoding = [Text.Encoding]::UTF8
-Add-Type -AssemblyName System.Windows.Forms
-Add-Type -TypeDefinition @"
-using System;
-using System.Runtime.InteropServices;
-public static class FolderPicker {
-  [ComImport, Guid("DC1C5A9C-E88A-4dde-A5A1-60F82A20AEF7")] class FileOpenDialog {}
-  [ComImport, Guid("43826D1E-E718-42EE-BC55-A1E261C37BFE"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-  interface IShellItem {
-    void BindToHandler(IntPtr pbc, ref Guid bhid, ref Guid riid, out IntPtr ppv);
-    void GetParent(out IShellItem ppsi);
-    void GetDisplayName(uint sigdnName, [MarshalAs(UnmanagedType.LPWStr)] out string ppszName);
-  }
-  // IFileOpenDialog, as far as GetResult (the methods must be declared in vtable order)
-  [ComImport, Guid("d57c7288-d4ad-4768-be02-9d969532d960"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-  interface IFileOpenDialog {
-    [PreserveSig] int Show(IntPtr parent);
-    void SetFileTypes(uint c, IntPtr specs); void SetFileTypeIndex(uint i); void GetFileTypeIndex(out uint i);
-    void Advise(IntPtr events, out uint cookie); void Unadvise(uint cookie);
-    void SetOptions(uint fos); void GetOptions(out uint fos);
-    void SetDefaultFolder(IShellItem si); void SetFolder(IShellItem si); void GetFolder(out IShellItem si);
-    void GetCurrentSelection(out IShellItem si);
-    void SetFileName([MarshalAs(UnmanagedType.LPWStr)] string name); void GetFileName([MarshalAs(UnmanagedType.LPWStr)] out string name);
-    void SetTitle([MarshalAs(UnmanagedType.LPWStr)] string title); void SetOkButtonLabel([MarshalAs(UnmanagedType.LPWStr)] string text);
-    void SetFileNameLabel([MarshalAs(UnmanagedType.LPWStr)] string label);
-    void GetResult(out IShellItem si);
-  }
-  const uint FOS_PICKFOLDERS = 0x20, FOS_FORCEFILESYSTEM = 0x40, FOS_PATHMUSTEXIST = 0x800;
-  const uint SIGDN_FILESYSPATH = 0x80058000;
-  public static string Pick(IntPtr owner, string title) {
-    var d = (IFileOpenDialog)new FileOpenDialog();
-    uint o; d.GetOptions(out o);
-    d.SetOptions(o | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST);
-    d.SetTitle(title); d.SetOkButtonLabel("Share this folder");
-    if (d.Show(owner) != 0) return "";  // cancelled (or failed)
-    IShellItem si; d.GetResult(out si);
-    string path; si.GetDisplayName(SIGDN_FILESYSPATH, out path);
-    return path;
-  }
-}
-"@
-$o = New-Object System.Windows.Forms.Form -Property @{
-  TopMost = $true; ShowInTaskbar = $false; FormBorderStyle = 'None'; StartPosition = 'Manual'
-  Location = New-Object System.Drawing.Point(-32000, -32000); Size = New-Object System.Drawing.Size(1, 1)
-}
-$o.Show(); $o.Activate()
-[FolderPicker]::Pick($o.Handle, 'Choose a folder of videos or photos to share with your headset')
-$o.Close()
-`;
+// ----- choosing folders -----
+// Folders are chosen in the panel itself, from a folder browser drawn by the page, rather than with
+// the system's folder dialog: Windows keeps a dialog opened by a background program behind the
+// browser the user is clicking in, where it can't be found. These listings go only to the panel,
+// which only this PC can open.
 
-// Ask for a folder with the system's own folder picker. Resolves to a path, or '' if cancelled.
-export function pickFolder() {
-  const run = (cmd, args) => new Promise((resolve, reject) => {
-    // no windowsHide: it would also hide the dialog; PowerShell shares this app's console, so no window flashes
-    execFile(cmd, args, { encoding: 'utf8', maxBuffer: 1 << 20 }, (err, out) => err ? reject(err) : resolve(out.trim()));
-  });
+// Where browsing starts: the usual media folders, then the drives (or volumes).
+export async function folderRoots() {
+  const home = os.homedir();
+  const places = [['Videos', 'Videos'], ['Pictures', 'Pictures'], ['Desktop', 'Desktop'], ['Downloads', 'Downloads'], ['Home', '']]
+    .map(([name, sub]) => ({ name, path: path.join(home, sub) }))
+    .filter(p => fs.existsSync(p.path));
+  let drives = [];
   if (process.platform === 'win32') {
-    // passed encoded (UTF-16LE, base64) so nothing in the script needs quoting
-    return run('powershell.exe', ['-NoProfile', '-STA', '-NonInteractive',
-      '-EncodedCommand', Buffer.from(WIN_PICKER, 'utf16le').toString('base64')]);
+    const letters = 'CDEFGHIJKLMNOPQRSTUVWXYZAB'.split('');
+    // checked together, each with a time limit, since an empty card reader or a sleeping network drive can be slow
+    const ok = await Promise.all(letters.map(l => Promise.race([
+      fsp.access(l + ':\\').then(() => true, () => false),
+      new Promise(r => setTimeout(() => r(false), 1500)),
+    ])));
+    drives = letters.filter((_, i) => ok[i]).map(l => ({ name: l + ':', path: l + ':\\' }));
+  } else {
+    const vols = process.platform === 'darwin' ? '/Volumes' : '/media';
+    drives = [{ name: '/', path: '/' }];
+    try { for (const d of await fsp.readdir(vols, { withFileTypes: true })) if (d.isDirectory()) drives.push({ name: d.name, path: path.join(vols, d.name) }); } catch {}
   }
-  if (process.platform === 'darwin') {
-    return run('osascript', ['-e', 'POSIX path of (choose folder with prompt "Choose a folder of videos or photos to share with your headset")'])
-      .catch(e => /-128/.test(String(e.message)) ? '' : Promise.reject(e)); // -128: cancelled
+  return { places, drives };
+}
+
+// A folder's subfolders, and how many videos and photos are directly in it (so you can tell which
+// folder is the one with your media). parent is null at the top of a drive.
+export async function listForPicker(dir) {
+  const abs = path.resolve(dir);
+  let dirents;
+  try { dirents = await fsp.readdir(abs, { withFileTypes: true }); }
+  catch (e) { throw new Error(e.code === 'EPERM' || e.code === 'EACCES' ? 'Windows won\'t let Four Eyes Share read that folder.' : `Couldn't open "${abs}".`); }
+  const folders = [];
+  let videos = 0, photos = 0;
+  for (const d of dirents) {
+    if (hiddenName(d.name) || d.name.startsWith('~')) continue;
+    if (d.isDirectory() || d.isSymbolicLink()) folders.push({ name: d.name, path: path.join(abs, d.name) });
+    else if (VIDEO_EXT.test(d.name)) videos++;
+    else if (IMAGE_EXT.test(d.name)) photos++;
   }
-  return run('zenity', ['--file-selection', '--directory', '--title=Choose a folder to share']).catch(e => e.code === 1 ? '' : Promise.reject(e));
+  folders.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+  const parent = path.dirname(abs);
+  return { path: abs, parent: parent === abs ? null : parent, folders, videos, photos };
 }
 
 export function qrSvg(text) {
@@ -104,9 +82,8 @@ async function readJson(req) {
   return body ? JSON.parse(body) : {};
 }
 
-export function createControlHandler(cfg, { urls, port, onQuit = () => {}, pick = pickFolder, log = () => {} }) {
+export function createControlHandler(cfg, { urls, port, onQuit = () => {}, log = () => {} }) {
   const hosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
-  let picking = false;
   return async function handle(req, res) {
     const json = (status, obj) => {
       res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
@@ -131,15 +108,9 @@ export function createControlHandler(cfg, { urls, port, onQuit = () => {}, pick 
       const body = await readJson(req);
       switch (url.pathname) {
         case '/api/folders/add': cfg.addFolder(String(body.path || '')); break;
-        case '/api/folders/browse': {
-          // one picker at a time: more clicks while it's open would only stack up more windows
-          if (picking) { json(409, { error: 'The folder window is already open on this PC. Choose a folder there, or cancel it.' }); return; }
-          picking = true;
-          let p;
-          try { p = await pick(); } finally { picking = false; }
-          if (p) cfg.addFolder(p);
-          break;
-        }
+        // the panel's folder browser: the starting places, or one folder's subfolders
+        case '/api/fs/roots': json(200, await folderRoots()); return;
+        case '/api/fs/list': json(200, await listForPicker(String(body.path || ''))); return;
         case '/api/folders/remove': cfg.removeFolder(String(body.id || '')); break;
         case '/api/devices/forget': cfg.forgetDevices(); log('forgot all paired devices; new pairing code made'); break;
         case '/api/quit': json(200, state(cfg, urls)); onQuit(); return;
@@ -187,6 +158,16 @@ button.primary{background:var(--acc);border-color:var(--acc);color:#fff}
 input[type=text]{flex:1;min-width:200px;font:inherit;padding:6px 10px;border-radius:6px;border:1px solid var(--line);background:var(--card);color:var(--fg)}
 .mute{color:var(--mute);font-size:14px}.err{color:var(--warn)}
 code{font-family:ui-monospace,Consolas,monospace}
+.picker{border:1px solid var(--line);border-radius:8px;margin:12px 0 0;background:var(--bg)}
+.pbar,.pfoot{display:flex;gap:8px;align-items:center;padding:8px 10px}
+.pbar{border-bottom:1px solid var(--line)}.pfoot{border-top:1px solid var(--line);justify-content:space-between;flex-wrap:wrap}
+.ppath{flex:1;font:600 14px ui-monospace,Consolas,monospace;word-break:break-all}
+.plist{max-height:340px;overflow:auto;padding:4px 0}
+.plist h3{font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:var(--mute);margin:10px 12px 4px}
+.plist button{display:block;width:100%;text-align:left;border:0;border-radius:0;background:none;padding:7px 14px}
+.plist button:hover,.plist button:focus-visible{background:var(--card);outline:none}
+.plist .empty{padding:10px 14px;color:var(--mute)}
+button:disabled{opacity:.5;cursor:default}
 </style></head><body><main>
 <h1>Four Eyes Share</h1>
 <p class="sub">Watch the videos and photos on this PC in Four Eyes on a Quest, over your home Wi-Fi. Nothing leaves your network, and only paired devices can see the folders below.</p>
@@ -217,6 +198,11 @@ code{font-family:ui-monospace,Consolas,monospace}
     <input type="text" id="path" placeholder="or paste a folder path, e.g. D:\\Videos" aria-label="Folder path">
     <button id="add">Add</button>
   </div>
+  <div class="picker" id="picker" hidden>
+    <div class="pbar"><button id="pup">↑ Up</button><span class="ppath" id="ppath"></span><button id="pclose">Cancel</button></div>
+    <div class="plist" id="plist" role="list"></div>
+    <div class="pfoot"><span class="mute" id="pcount"></span><button class="primary" id="pshare" disabled>Share this folder</button></div>
+  </div>
   <p class="err" id="err"></p>
 </section>
 
@@ -243,6 +229,7 @@ function show(s){
   if(lastDevices!=null && s.devices>lastDevices) $('paired').textContent='✓ A device just paired.';
   lastDevices=s.devices;
   $('qr').innerHTML=s.qr;
+  shared=s.folders;
   const ul=$('folders'); ul.innerHTML='';
   if(!s.folders.length){ const li=document.createElement('li'); li.className='mute'; li.textContent='No folders shared yet.'; ul.appendChild(li); }
   for(const f of s.folders){
@@ -255,10 +242,35 @@ function show(s){
   $('devices').textContent=s.devices; $('fp').textContent=s.fingerprint; $('cfg').textContent=s.configFile;
 }
 async function act(path,body){ $('err').textContent=''; try{ show(await call(path,body)); }catch(e){ $('err').textContent=e.message; } }
-$('browse').onclick=async()=>{
-  const b=$('browse'); b.disabled=true; b.textContent='Choose a folder in the window that opened…';
-  try{ await act('/api/folders/browse',{}); } finally { b.disabled=false; b.textContent='Add folder…'; }
-};
+// ----- the folder browser: open folders until you're in the one to share, then "Share this folder" -----
+let here=null, shared=[]; // here: the listing on show (null at the starting places)
+const plural=(n,one,many)=>n+' '+(n===1? one : many);
+function entry(label,onclick){ const b=document.createElement('button'); b.textContent=label; b.setAttribute('role','listitem'); b.onclick=onclick; return b; }
+async function browseTo(path){
+  $('err').textContent='';
+  try{
+    const list=$('plist');
+    if(path==null){
+      const r=await call('/api/fs/roots',{}); here=null; list.innerHTML='';
+      const group=(title,items)=>{ if(!items.length) return; const h=document.createElement('h3'); h.textContent=title; list.appendChild(h); for(const it of items) list.appendChild(entry('📁  '+it.name,()=>browseTo(it.path))); };
+      group('Places',r.places); group('Drives',r.drives);
+      $('ppath').textContent='Choose where to look'; $('pcount').textContent=''; $('pup').disabled=true; $('pshare').disabled=true;
+    }else{
+      const r=await call('/api/fs/list',{path}); here=r; list.innerHTML='';
+      for(const f of r.folders) list.appendChild(entry('📁  '+f.name,()=>browseTo(f.path)));
+      if(!r.folders.length){ const d=document.createElement('div'); d.className='empty'; d.textContent='No folders inside this one.'; list.appendChild(d); }
+      const already=shared.some(f=>f.path.toLowerCase()===r.path.toLowerCase());
+      $('ppath').textContent=r.path; $('pup').disabled=false;
+      $('pcount').textContent= already? '✓ Already shared' : 'In this folder: '+plural(r.videos,'video','videos')+', '+plural(r.photos,'photo','photos')+' (Four Eyes also sees the folders inside it)';
+      $('pshare').disabled=already;
+    }
+    list.scrollTop=0; const first=list.querySelector('button'); if(first) first.focus();
+  }catch(e){ $('err').textContent=e.message; }
+}
+$('browse').onclick=()=>{ $('picker').hidden=false; browseTo(null); };
+$('pclose').onclick=()=>{ $('picker').hidden=true; };
+$('pup').onclick=()=>browseTo(here && here.parent!=null? here.parent : null);
+$('pshare').onclick=async()=>{ if(!here) return; await act('/api/folders/add',{path:here.path}); if(!$('err').textContent) $('picker').hidden=true; };
 $('add').onclick=()=>{ const p=$('path').value.trim(); if(p) act('/api/folders/add',{path:p}).then(()=>{ if(!$('err').textContent) $('path').value=''; }); };
 $('path').onkeydown=e=>{ if(e.key==='Enter') $('add').click(); };
 $('forget').onclick=()=>{ if(confirm('Unpair every device? They will need the new pairing code to connect again.')) act('/api/devices/forget',{}); };

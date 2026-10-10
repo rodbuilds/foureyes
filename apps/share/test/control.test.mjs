@@ -8,18 +8,20 @@ import { makeCertificate } from '../src/cert.mjs';
 import { loadConfig } from '../src/config.mjs';
 import { startControlServer, qrSvg } from '../src/control.mjs';
 
-let tmp, cfg, server, port, picked = '';
+let tmp, cfg, server, port;
 
 before(async () => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'fes-ctl-'));
   fs.mkdirSync(path.join(tmp, 'Videos')); fs.mkdirSync(path.join(tmp, 'Picked'));
+  fs.mkdirSync(path.join(tmp, 'Picked', 'Trip 10')); fs.mkdirSync(path.join(tmp, 'Picked', 'Trip 9')); fs.mkdirSync(path.join(tmp, 'Picked', '.cache'));
+  for (const n of ['a.mp4', 'b.MKV', 'c.jpg', 'notes.txt', '.hidden.mp4']) fs.writeFileSync(path.join(tmp, 'Picked', n), '');
   cfg = loadConfig(path.join(tmp, 'config'));
   cfg.data.tls = makeCertificate();
-  server = await startControlServer(cfg, { port: 0, urls: () => ['https://192.168.1.20:8443'], pick: async () => picked });
+  server = await startControlServer(cfg, { port: 0, urls: () => ['https://192.168.1.20:8443'] });
   port = server.address().port;
   // the handler checks the Host header against the port it was given; restart on the real one
   server.close();
-  server = await startControlServer(cfg, { port, urls: () => ['https://192.168.1.20:8443'], pick: async () => picked });
+  server = await startControlServer(cfg, { port, urls: () => ['https://192.168.1.20:8443'] });
 });
 after(() => { server?.close(); fs.rmSync(tmp, { recursive: true, force: true }); });
 
@@ -41,15 +43,11 @@ test('the panel and its state are served, with the pairing code and a QR code', 
   assert.match(s.fingerprint, /^([0-9A-F]{2}:){31}[0-9A-F]{2}$/);
 });
 
-test('folders are added by path or with the picker, and removed', async () => {
+test('folders are added by path, and removed', async () => {
   let s = await (await call('/api/folders/add', { body: { path: path.join(tmp, 'Videos') } })).json();
   assert.deepEqual(s.folders.map(f => f.name), ['Videos']);
-  picked = path.join(tmp, 'Picked');
-  s = await (await call('/api/folders/browse', { body: {} })).json();
+  s = await (await call('/api/folders/add', { body: { path: path.join(tmp, 'Picked') } })).json();
   assert.deepEqual(s.folders.map(f => f.name), ['Videos', 'Picked']);
-  picked = ''; // cancelled
-  s = await (await call('/api/folders/browse', { body: {} })).json();
-  assert.equal(s.folders.length, 2);
   const bad = await call('/api/folders/add', { body: { path: path.join(tmp, 'nope') } });
   assert.equal(bad.status, 400); assert.match((await bad.json()).error, /doesn't exist/);
   s = await (await call('/api/folders/remove', { body: { id: s.folders[0].id } })).json();
@@ -57,18 +55,25 @@ test('folders are added by path or with the picker, and removed', async () => {
   assert.deepEqual(loadConfig(cfg.dir).data.folders.map(f => f.name), ['Picked'], 'saved to disk');
 });
 
-test('only one folder picker opens at a time', async () => {
-  let finish;
-  picked = new Promise(r => { finish = r; }); // the picker stays open until finish()
-  const first = call('/api/folders/browse', { body: {} });
-  await new Promise(r => setTimeout(r, 50));
-  const second = await call('/api/folders/browse', { body: {} });
-  assert.equal(second.status, 409);
-  assert.match((await second.json()).error, /already open/);
-  finish('');
-  assert.equal((await first).status, 200);
-  picked = '';
-  assert.equal((await call('/api/folders/browse', { body: {} })).status, 200, 'and it can open again once closed');
+test('the folder browser starts from the usual places and the drives', async () => {
+  const r = await (await call('/api/fs/roots', { body: {} })).json();
+  assert.ok(r.places.some(p => p.name === 'Home'));
+  assert.ok(r.drives.length >= 1);
+  if (process.platform === 'win32') assert.ok(r.drives.some(d => d.path === 'C:\\'));
+});
+
+test('the folder browser lists subfolders (not hidden ones) and counts videos and photos', async () => {
+  const r = await (await call('/api/fs/list', { body: { path: path.join(tmp, 'Picked') } })).json();
+  assert.equal(r.path, path.join(tmp, 'Picked'));
+  assert.equal(r.parent, tmp);
+  assert.deepEqual(r.folders.map(f => f.name), ['Trip 9', 'Trip 10'], 'in natural order, without .cache');
+  assert.deepEqual([r.videos, r.photos], [2, 1]);
+  const top = await (await call('/api/fs/list', { body: { path: path.parse(tmp).root } })).json();
+  assert.equal(top.parent, null, 'the top of a drive has no parent');
+  const bad = await call('/api/fs/list', { body: { path: path.join(tmp, 'nope') } });
+  assert.equal(bad.status, 400);
+  const noHeader = await fetch(`http://127.0.0.1:${port}/api/fs/list`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ path: tmp }) });
+  assert.equal(noHeader.status, 404, 'listings need the panel header too');
 });
 
 test('changes without the panel\'s header, or from another site, are refused', async () => {

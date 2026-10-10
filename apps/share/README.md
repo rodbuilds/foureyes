@@ -15,7 +15,8 @@ thumbnails all work as they do with local folders.
    **control panel** opens in your browser at `http://127.0.0.1:8444` (reachable from this PC only).
    Run it again at any time to reopen the panel. A second copy doesn't start; it opens the running
    copy's panel instead.
-2. Click **Add folder…** and choose your video and photo folders. They are remembered.
+2. Click **Add folder…**, open folders until you're in one with your videos or photos (it shows how
+   many each folder holds), and click **Share this folder**. Or paste a path. Folders are remembered.
 3. On the Quest, open **Quest Browser** and go to the address the panel shows, for example
    `192.168.1.20:8443`. You don't need to type `https://`.
 4. The Quest warns that the connection isn't private. Choose **Advanced → Proceed**. You only do this
@@ -87,7 +88,7 @@ How it's put together:
 |---|---|
 | `src/main.mjs` | Command line, starts both servers, prints the addresses |
 | `src/server.mjs` | The HTTPS server the headset uses: pairing, `/api/share`, `/api/list`, `/api/latest`, `/media/…` with range requests |
-| `src/control.mjs` | The local control panel and the native folder picker |
+| `src/control.mjs` | The local control panel, including its folder browser |
 | `src/cert.mjs` | The self-signed certificate, built with Node's own crypto (no OpenSSL, no libraries) |
 | `src/config.mjs` | Settings file, folders, pairing and devices |
 | `src/web-assets.mjs` | Serves `apps/web/index.html` with the CDN links pointed at local copies, and adds the `<meta name="four-eyes-share">` marker that turns on PC Share in the page |
