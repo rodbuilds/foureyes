@@ -29,12 +29,14 @@ const call = (p, { body, headers = {}, host } = {}) => fetch(`http://127.0.0.1:$
   body: body === undefined ? undefined : JSON.stringify(body),
 });
 
-test('the panel and its state are served, with the pairing link and a QR code', async () => {
+test('the panel and its state are served, with the pairing code and a QR code', async () => {
   const page = await call('/');
   assert.equal(page.status, 200);
   assert.match(page.headers.get('content-security-policy'), /default-src 'none'/);
   const s = await (await call('/api/state')).json();
-  assert.deepEqual(s.pairLinks, ['https://192.168.1.20:8443/pair/' + cfg.data.pairKey]);
+  assert.deepEqual(s.addresses, ['https://192.168.1.20:8443']);
+  assert.match(s.code, /^\d{6}$/);
+  assert.equal(s.code, cfg.data.pairCode);
   assert.match(s.qr, /^<svg/);
   assert.match(s.fingerprint, /^([0-9A-F]{2}:){31}[0-9A-F]{2}$/);
 });

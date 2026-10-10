@@ -11,16 +11,21 @@ thumbnails all work as they do with local folders.
 
 ## Using it
 
-1. Run `four-eyes-share.exe`. A console window shows the addresses, and the **control panel** opens
-   in your browser at `http://127.0.0.1:8444` (reachable from this PC only).
+1. Run `four-eyes-share.exe`. A console window shows the address and pairing code, and the
+   **control panel** opens in your browser at `http://127.0.0.1:8444` (reachable from this PC only).
+   Run it again at any time to reopen the panel. A second copy doesn't start; it opens the running
+   copy's panel instead.
 2. Click **Add folder…** and choose your video and photo folders. They are remembered.
-3. On the Quest, open **Quest Browser** and go to the **pairing link** the panel shows, for example
-   `https://192.168.1.20:8443/pair/k7mx3qp2ab`. The panel also shows it as a QR code.
+3. On the Quest, open **Quest Browser** and go to the address the panel shows, for example
+   `192.168.1.20:8443`. You don't need to type `https://`.
 4. The Quest warns that the connection isn't private. Choose **Advanced → Proceed**. You only do this
    once (see [the certificate](#the-certificate)).
-5. Four Eyes opens. Press **Enter VR** and open the media browser. Your folders are listed under Places.
+5. Type the **6-digit pairing code** from the panel, for example `441 388`. Each code pairs one device,
+   and the panel shows a new one straight after.
+6. Four Eyes opens. Press **Enter VR** and open the media browser. Your folders are listed under Places.
 
-The next time, just go to `https://192.168.1.20:8443` (bookmark it). The Quest stays paired.
+The next time, just go to the address (bookmark it). The Quest stays paired. The panel's QR code is
+a pairing link with the code built in, for a phone or tablet.
 
 Windows asks once whether to let the app through the firewall. Allow **private networks**, which is
 your home Wi-Fi.
@@ -30,11 +35,13 @@ your home Wi-Fi.
 - **Nothing leaves your home network.** The page, three.js and the fonts are all served by the app,
   so a Quest using PC Share never contacts a CDN, Google, or anyone else. There's no account, no
   telemetry, and no cloud.
-- **Only paired devices see anything.** Until a device has opened the pairing link, it gets a "not
-  paired" page and no folder names, listings or files. Pairing gives that browser a long random
+- **Only paired devices see anything.** Until a device has entered the pairing code, it gets only
+  the code page: no folder names, listings or files. Pairing gives that browser a long random
   cookie (HttpOnly, Secure, SameSite=Strict). The app stores only a hash of it.
-- **Forget all devices** in the panel unpairs everything and makes a new pairing link, so old links
-  stop working. Repeated wrong pairing keys pause pairing for a minute.
+- **The 6-digit code is safe to keep short.** Each code pairs one device and is then replaced. Five
+  wrong codes pause pairing for five minutes. At that rate, getting through half of the million
+  codes would take about a year. The form only accepts posts from its own page.
+- **Forget all devices** in the panel unpairs everything and makes a new code.
 - **Only media in the shared folders is served:** videos and photos by file extension. It never
   serves other files, hidden files (`.name`, `$name`, `System Volume Information`), paths that use
   `..`, or links and junctions that lead outside a shared folder. The headset sees folder *names*,
@@ -42,7 +49,7 @@ your home Wi-Fi.
 - **The control panel is local only.** It listens on `127.0.0.1`, rejects other host names (DNS
   rebinding), and only accepts changes that carry its own header, which other websites can't send.
 
-Settings live in `%APPDATA%\Four Eyes Share\config.json`: the shared folder paths, the pairing key,
+Settings live in `%APPDATA%\Four Eyes Share\config.json`: the shared folder paths, the pairing code,
 the hashes of paired devices, and the certificate with its private key.
 
 ## The certificate

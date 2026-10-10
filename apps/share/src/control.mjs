@@ -1,5 +1,5 @@
 // The control panel: a small page on this PC only (127.0.0.1) where the user picks the folders to
-// share, sees the address and pairing link for the Quest (with a QR code), and can forget paired
+// share, sees the address and pairing code for the Quest (and a QR code), and can forget paired
 // devices. It is never reachable from the network.
 import { execFile } from 'node:child_process';
 import http from 'node:http';
@@ -39,9 +39,9 @@ export function qrSvg(text) {
 // state for the panel; urls() gives the share's addresses (they can change as networks come and go)
 function state(cfg, urls) {
   const base = urls();
-  const pair = base.map(u => u + '/pair/' + cfg.data.pairKey);
   return {
-    addresses: base, pairLinks: pair, qr: pair.length ? qrSvg(pair[0]) : '',
+    // the QR code opens the pairing link directly, so a scanned code needs no typing
+    addresses: base, code: cfg.data.pairCode, qr: base.length ? qrSvg(base[0] + '/pair/' + cfg.data.pairCode) : '',
     folders: cfg.data.folders, devices: cfg.data.devices.length,
     fingerprint: cfg.data.tls ? fingerprint(cfg.data.tls.cert) : '', configFile: cfg.file,
   };
@@ -81,7 +81,7 @@ export function createControlHandler(cfg, { urls, port, onQuit = () => {}, pick 
         case '/api/folders/add': cfg.addFolder(String(body.path || '')); break;
         case '/api/folders/browse': { const p = await pick(); if (p) cfg.addFolder(p); break; }
         case '/api/folders/remove': cfg.removeFolder(String(body.id || '')); break;
-        case '/api/devices/forget': cfg.forgetDevices(); log('forgot all paired devices; new pairing link made'); break;
+        case '/api/devices/forget': cfg.forgetDevices(); log('forgot all paired devices; new pairing code made'); break;
         case '/api/quit': json(200, state(cfg, urls)); onQuit(); return;
         default: json(404, { error: 'Not found.' }); return;
       }
@@ -114,7 +114,9 @@ h1{margin:0 0 4px;font-size:28px}h2{font-size:18px;margin:0 0 8px}
 .connect{display:grid;grid-template-columns:1fr 200px;gap:16px;align-items:start}
 @media (max-width:640px){.connect{grid-template-columns:1fr}}
 .qr svg{width:200px;height:200px;background:#fff;border-radius:6px}
-.big{font:600 20px/1.3 ui-monospace,Consolas,monospace;word-break:break-all;margin:4px 0 10px}
+.big{font:600 22px/1.3 ui-monospace,Consolas,monospace;word-break:break-all;margin:4px 0 10px}
+.code{font:700 56px/1.1 ui-monospace,Consolas,monospace;letter-spacing:.12em;margin:4px 0 6px}
+.ok{color:#3fb950;font-weight:600}
 ol{padding-left:20px;margin:6px 0}
 ul.folders{list-style:none;margin:0 0 12px;padding:0}
 ul.folders li{display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
@@ -134,10 +136,13 @@ code{font-family:ui-monospace,Consolas,monospace}
     <h2>Connect your Quest</h2>
     <ol>
       <li>Put the Quest on the same Wi-Fi as this PC and open <b>Quest Browser</b>.</li>
-      <li>Go to this pairing link (type it in, or scan the code with a phone and send it on):
-        <div class="big" id="pair">…</div></li>
-      <li>The browser warns that the connection isn't private, because this PC made its own certificate. Choose <b>Advanced</b>, then <b>Proceed</b>. You only do this once.</li>
-      <li>Four Eyes opens. Your folders are under <b>PC Share</b> in the media browser. Next time just go to <span id="addr" class="big" style="font-size:16px"></span></li>
+      <li>Go to:
+        <div class="big" id="addr">…</div></li>
+      <li>The browser warns that the connection isn't private, because this PC made its own certificate. Choose <b>Advanced</b>, then <b>Proceed</b>.</li>
+      <li>Type this pairing code:
+        <div class="code" id="code">…</div>
+        <span class="mute">Each code works once: after a device pairs, a new one appears here.</span> <span class="ok" id="paired"></span></li>
+      <li>Four Eyes opens. Your folders are under <b>PC Share</b> in the media browser. Next time just go to the address; the Quest stays paired.</li>
     </ol>
     <p class="mute" id="others"></p>
   </div>
@@ -157,7 +162,7 @@ code{font-family:ui-monospace,Consolas,monospace}
 
 <section class="card">
   <h2>Paired devices</h2>
-  <p><span id="devices">0</span> device(s) can see your shared folders. <b>Forget all devices</b> unpairs them all and makes a new pairing link.</p>
+  <p><span id="devices">0</span> device(s) can see your shared folders. <b>Forget all devices</b> unpairs them all and makes a new pairing code.</p>
   <div class="row"><button id="forget">Forget all devices</button><button id="quit">Stop sharing</button></div>
   <p class="mute">Certificate fingerprint (SHA-256): <code id="fp"></code><br>Settings: <code id="cfg"></code></p>
 </section>
@@ -168,10 +173,15 @@ async function call(path,body){
   const r=await fetch(path,body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json','X-Four-Eyes-Share':'1'},body:JSON.stringify(body)});
   const j=await r.json(); if(!r.ok) throw new Error(j.error||('HTTP '+r.status)); return j;
 }
+// addresses without "https://": the server answers plain http on the same port with a redirect
+const short=u=>u.replace('https://','');
+let lastDevices=null;
 function show(s){
-  $('pair').textContent=s.pairLinks[0]||'No network connection found. Connect this PC to your Wi-Fi.';
-  $('addr').textContent=s.addresses[0]||'';
-  $('others').textContent=s.addresses.length>1?'Other addresses for this PC, if that one doesn\\'t work: '+s.pairLinks.slice(1).join('   '):'';
+  $('addr').textContent=s.addresses.length? short(s.addresses[0]) : 'No network connection found. Connect this PC to your Wi-Fi.';
+  $('code').textContent=s.code.slice(0,3)+' '+s.code.slice(3);
+  $('others').textContent=s.addresses.length>1?'Other addresses for this PC, if that one doesn\\'t work: '+s.addresses.slice(1).map(short).join('   '):'';
+  if(lastDevices!=null && s.devices>lastDevices) $('paired').textContent='✓ A device just paired.';
+  lastDevices=s.devices;
   $('qr').innerHTML=s.qr;
   const ul=$('folders'); ul.innerHTML='';
   if(!s.folders.length){ const li=document.createElement('li'); li.className='mute'; li.textContent='No folders shared yet.'; ul.appendChild(li); }
@@ -188,8 +198,8 @@ async function act(path,body){ $('err').textContent=''; try{ show(await call(pat
 $('browse').onclick=()=>act('/api/folders/browse',{});
 $('add').onclick=()=>{ const p=$('path').value.trim(); if(p) act('/api/folders/add',{path:p}).then(()=>{ if(!$('err').textContent) $('path').value=''; }); };
 $('path').onkeydown=e=>{ if(e.key==='Enter') $('add').click(); };
-$('forget').onclick=()=>{ if(confirm('Unpair every device? They will need the new pairing link to connect again.')) act('/api/devices/forget',{}); };
+$('forget').onclick=()=>{ if(confirm('Unpair every device? They will need the new pairing code to connect again.')) act('/api/devices/forget',{}); };
 $('quit').onclick=async()=>{ if(!confirm('Stop sharing? Your headset will lose access until you start Four Eyes Share again.')) return; try{ await call('/api/quit',{}); }catch(e){} document.body.innerHTML='<main><h1>Four Eyes Share has stopped.</h1><p>You can close this tab.</p></main>'; };
 call('/api/state').then(show).catch(e=>$('err').textContent=e.message);
-setInterval(()=>call('/api/state').then(show).catch(()=>{}),5000);
+setInterval(()=>call('/api/state').then(show).catch(()=>{}),2000);
 </script></body></html>`;

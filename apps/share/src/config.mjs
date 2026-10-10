@@ -1,5 +1,5 @@
 // Settings kept between runs, in one JSON file in the user's app-data folder: the shared folders,
-// the pairing key, the paired devices (only a hash of each device's cookie), the ports and the
+// the pairing code, the paired devices (only a hash of each device's cookie), the ports and the
 // certificate. Nothing about the user's files is stored here, only the folder paths they chose.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -15,13 +15,11 @@ export function defaultConfigDir() {
   return path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'four-eyes-share');
 }
 
-// Pairing keys avoid look-alike characters (0/o, 1/l/i) because people type them on a Quest.
-const KEY_CHARS = '23456789abcdefghjkmnpqrstuvwxyz';
-export function newPairKey(n = 10) {
-  let s = '';
-  for (const b of crypto.randomBytes(n)) s += KEY_CHARS[b % KEY_CHARS.length];
-  return s;
-}
+// The pairing code: 6 digits, easy to type on a Quest. It is used once (a new one is made when a
+// device pairs) and the server pauses pairing after a few wrong tries, which keeps guessing it hopeless.
+export const PAIR_DIGITS = 6;
+export const newPairCode = () => String(crypto.randomInt(0, 10 ** PAIR_DIGITS)).padStart(PAIR_DIGITS, '0');
+export const isPairCode = s => /^\d+$/.test(String(s)) && String(s).length === PAIR_DIGITS;
 export const hashToken = t => crypto.createHash('sha256').update(String(t)).digest('hex');
 
 function fresh() {
@@ -30,7 +28,7 @@ function fresh() {
     port: DEFAULT_PORT,
     controlPort: DEFAULT_CONTROL_PORT,
     folders: [],   // [{id, name, path}]
-    pairKey: newPairKey(),
+    pairCode: newPairCode(),
     devices: [],   // [{hash, added, agent}]
     tls: null,     // {cert, key, notAfter}
   };
@@ -48,7 +46,8 @@ export function loadConfig(dir = defaultConfigDir()) {
   }
   if (!Array.isArray(data.folders)) data.folders = [];
   if (!Array.isArray(data.devices)) data.devices = [];
-  if (!data.pairKey) data.pairKey = newPairKey();
+  delete data.pairKey; // the 10-letter key used before pairing codes
+  if (!isPairCode(data.pairCode)) data.pairCode = newPairCode();
   const cfg = {
     dir, file, data,
     save() {
@@ -73,10 +72,15 @@ export function loadConfig(dir = defaultConfigDir()) {
       if (data.folders.length !== n) cfg.save();
       return data.folders.length !== n;
     },
-    // a new device cookie, remembered as a hash so the config file can't be used to impersonate it
-    addDevice(agent = '') {
+    // Trade the pairing code for a new device cookie, or null if the code is wrong. The cookie is
+    // remembered as a hash, so the config file can't be used to impersonate it. The code is then
+    // replaced, so each code pairs one device.
+    pair(code, agent = '') {
+      const want = Buffer.from(data.pairCode), got = Buffer.from(String(code ?? '').replace(/\s+/g, ''));
+      if (got.length !== want.length || !crypto.timingSafeEqual(got, want)) return null;
       const token = crypto.randomBytes(32).toString('base64url');
       data.devices.push({ hash: hashToken(token), added: new Date().toISOString(), agent: String(agent).slice(0, 200) });
+      data.pairCode = newPairCode();
       cfg.save(); return token;
     },
     hasDevice(token) {
@@ -84,9 +88,9 @@ export function loadConfig(dir = defaultConfigDir()) {
       const h = Buffer.from(hashToken(token), 'hex');
       return data.devices.some(d => d.hash.length === 64 && crypto.timingSafeEqual(Buffer.from(d.hash, 'hex'), h));
     },
-    // forget every paired device and make a new pairing key, so old links stop working too
+    // forget every paired device, with a new pairing code too
     forgetDevices() {
-      data.devices = []; data.pairKey = newPairKey(); cfg.save();
+      data.devices = []; data.pairCode = newPairCode(); cfg.save();
     },
   };
   return cfg;

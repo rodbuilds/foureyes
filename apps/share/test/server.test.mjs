@@ -3,18 +3,19 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
+import http from 'node:http';
 import https from 'node:https';
 import os from 'node:os';
 import path from 'node:path';
 import { makeCertificate, needsNewCertificate } from '../src/cert.mjs';
 import { loadConfig } from '../src/config.mjs';
-import { parseRange, startShareServer } from '../src/server.mjs';
+import { MAX_MISSES, parseRange, startShareServer } from '../src/server.mjs';
 import { loadWebAssets, sharePage } from '../src/web-assets.mjs';
 
 let tmp, cfg, server, base, cookie;
 const VIDEO = Buffer.from(Array.from({ length: 1000 }, (_, i) => i % 256));
 
-function get(p, { headers = {}, method = 'GET' } = {}) {
+function get(p, { headers = {}, method = 'GET', body } = {}) {
   return new Promise((resolve, reject) => {
     const req = https.request(base + p, { method, headers, rejectUnauthorized: false }, res => {
       const chunks = [];
@@ -25,10 +26,12 @@ function get(p, { headers = {}, method = 'GET' } = {}) {
         resolve({ status: res.statusCode, headers: res.headers, body, json });
       });
     });
-    req.on('error', reject); req.end();
+    req.on('error', reject); req.end(body);
   });
 }
 const authed = (p, o = {}) => get(p, { ...o, headers: { cookie, ...(o.headers || {}) } });
+// the pairing form, as the browser submits it
+const post = (p, body, headers = {}) => get(p, { method: 'POST', body, headers: { 'content-type': 'application/x-www-form-urlencoded', ...headers } });
 
 before(async () => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'fes-test-'));
@@ -53,32 +56,54 @@ before(async () => {
 });
 after(() => { server?.close(); fs.rmSync(tmp, { recursive: true, force: true }); });
 
-test('an unpaired device gets the "not paired" page and no data', async () => {
+test('an unpaired device gets the pairing-code page and no data', async () => {
   const page = await get('/');
-  assert.equal(page.status, 401);
-  assert.match(page.body.toString(), /isn't paired yet/);
+  assert.equal(page.status, 200); // the pairing page itself, with nothing from the share in it
+  assert.match(page.body.toString(), /pairing code/);
+  assert.match(page.body.toString(), /<form method="post" action="\/pair">/);
+  assert.match(page.body.toString(), /inputmode="numeric"/);
   for (const p of ['/api/share', '/api/list?path=' + cfg.data.folders[0].id, '/media/' + cfg.data.folders[0].id + '/clip.mp4', '/vendor/three.min.js']) {
     const r = await get(p);
     assert.equal(r.status, 401, p);
   }
 });
 
-test('a wrong pairing key is refused, and repeated guessing locks pairing for a while', async () => {
-  const r = await get('/pair/wrongkey');
-  assert.equal(r.status, 403);
-  assert.ok(!r.headers['set-cookie']);
-  for (let i = 0; i < 9; i++) await get('/pair/guess' + i);
-  const locked = await get('/pair/' + cfg.data.pairKey); // even the right key, while locked
-  assert.equal(locked.status, 429);
+const wrongCode = () => String((Number(cfg.data.pairCode) + 1) % 1e6).padStart(6, '0');
+
+test('the pairing code is 6 digits', () => {
+  assert.match(cfg.data.pairCode, /^\d{6}$/);
 });
 
-test('the right pairing key gives a secure, http-only cookie and only a hash is stored', async (t) => {
-  // a fresh handler (the lock above is per server), sharing the same config
+test('a wrong code is refused, and repeated guessing pauses pairing', async () => {
+  const r = await post('/pair', 'code=' + wrongCode());
+  assert.equal(r.status, 403);
+  assert.match(r.body.toString(), /That code didn/);
+  assert.ok(!r.headers['set-cookie']);
+  for (let i = 1; i < MAX_MISSES; i++) await get('/pair/' + wrongCode());
+  const locked = await post('/pair', 'code=' + cfg.data.pairCode); // even the right code, while paused
+  assert.equal(locked.status, 429);
+  assert.ok(!locked.headers['set-cookie']);
+});
+
+test('the pairing form only accepts posts from its own page', async (t) => {
   const s2 = await startShareServer(cfg, loadWebAssets(), { port: 0, host: '127.0.0.1' });
   t.after(() => s2.close());
   const saved = base; base = 'https://127.0.0.1:' + s2.address().port;
   try {
-    const r = await get('/pair/' + cfg.data.pairKey.toUpperCase()); // case doesn't matter when typing it
+    const r = await post('/pair', 'code=' + cfg.data.pairCode, { 'sec-fetch-site': 'cross-site' });
+    assert.equal(r.status, 403);
+    assert.ok(!r.headers['set-cookie']);
+  } finally { base = saved; }
+});
+
+test('the right code, typed with a space, gives a secure, http-only cookie; only a hash is stored', async (t) => {
+  // a fresh handler (the pause above is per server), sharing the same config
+  const s2 = await startShareServer(cfg, loadWebAssets(), { port: 0, host: '127.0.0.1' });
+  t.after(() => s2.close());
+  const saved = base; base = 'https://127.0.0.1:' + s2.address().port;
+  try {
+    const code = cfg.data.pairCode;
+    const r = await post('/pair', 'code=' + encodeURIComponent(code.slice(0, 3) + ' ' + code.slice(3)), { 'sec-fetch-site': 'same-origin' });
     assert.equal(r.status, 303);
     assert.equal(r.headers.location, '/');
     const c = r.headers['set-cookie'][0];
@@ -88,7 +113,23 @@ test('the right pairing key gives a secure, http-only cookie and only a hash is 
     const stored = fs.readFileSync(cfg.file, 'utf8');
     assert.ok(!stored.includes(token), 'the cookie itself is not written to disk');
     assert.ok(stored.includes(crypto.createHash('sha256').update(token).digest('hex')));
+    // each code pairs one device: it's replaced now
+    assert.notEqual(cfg.data.pairCode, code);
+    assert.equal((await get('/pair/' + code)).status, 403);
+    // the QR code's link form works with the new one
+    const viaLink = await get('/pair/' + cfg.data.pairCode);
+    assert.equal(viaLink.status, 303);
+    assert.equal(cfg.data.devices.length, 2);
   } finally { base = saved; }
+});
+
+test('plain http on the same port redirects to https, so the address works without "https://"', async () => {
+  const port = server.address().port;
+  const r = await new Promise((resolve, reject) => {
+    http.get({ host: '127.0.0.1', port, path: '/', headers: { host: '192.168.1.20:' + port } }, res => { res.resume(); resolve(res); }).on('error', reject);
+  });
+  assert.equal(r.statusCode, 301);
+  assert.equal(r.headers.location, 'https://192.168.1.20:' + port + '/');
 });
 
 test('a paired device gets the page, served without any CDN', async () => {
@@ -175,10 +216,10 @@ test('only GET and HEAD are answered', async () => {
   assert.equal(head.status, 200); assert.equal(head.headers['content-length'], '1000'); assert.equal(head.body.length, 0);
 });
 
-test('forgetting devices locks out the paired cookie and the old pairing link', async () => {
-  const oldKey = cfg.data.pairKey;
+test('forgetting devices locks out the paired cookie and changes the code', async () => {
+  const oldCode = cfg.data.pairCode;
   cfg.forgetDevices();
-  assert.notEqual(cfg.data.pairKey, oldKey);
+  assert.notEqual(cfg.data.pairCode, oldCode);
   assert.equal((await authed('/api/share')).status, 401);
 });
 

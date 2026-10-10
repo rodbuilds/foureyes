@@ -51,7 +51,9 @@ before(async () => {
     url: base + '/',
     before: async page => {
       page.on('request', r => requests.push(r.url()));
-      await page.goto(base + '/pair/' + cfg.data.pairKey, { waitUntil: 'load' }); // the one-time pairing link
+      await page.goto(base + '/', { waitUntil: 'load' }); // as on a Quest: the code page, then type the code
+      await page.type('input[name=code]', cfg.data.pairCode);
+      await Promise.all([page.waitForNavigation({ waitUntil: 'load' }), page.click('form button')]);
     },
   });
 

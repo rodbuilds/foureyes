@@ -1,14 +1,16 @@
 // The HTTPS server the Quest talks to. It serves the Four Eyes page, a JSON listing of the shared
 // folders, and the videos and photos in them (with range requests, so seeking works).
 //
-// Privacy: nothing is served to a device until it has been paired. Pairing means opening
-// /pair/<key> once, with the key shown in the control panel on this PC; the device then gets a
-// cookie. Only videos and photos inside the shared folders are ever served: no other files, no
+// Privacy: nothing is served to a device until it has been paired. Pairing means typing the 6-digit
+// code shown on this PC into the page an unpaired device gets (or opening /pair/<code> from the QR
+// code) once; the device then gets a cookie. Only videos and photos inside the shared folders are ever served: no other files, no
 // hidden files, nothing reached through "..", and nothing a link inside a shared folder points
 // outside it to.
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
+import http from 'node:http';
 import https from 'node:https';
+import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
@@ -136,23 +138,42 @@ function page(title, html) {
 <title>${esc(title)}</title><style>body{font:18px/1.5 system-ui,sans-serif;max-width:40em;margin:3em auto;padding:0 16px;background:#111;color:#eee}
 code{background:#222;padding:2px 6px;border-radius:4px}h1{font-size:1.6em}</style></head><body>${html}</body></html>`;
 }
-const LOCKED = page('Four Eyes Share', `<h1>Four Eyes Share</h1>
-<p>This device isn't paired yet. On the PC, open the Four Eyes Share window and open the <b>pairing link</b> it shows
-(it ends in <code>/pair/…</code>) on this device. You only need to do this once.</p>`);
-const BAD_KEY = page('Four Eyes Share', `<h1>That pairing link didn't work</h1>
-<p>It may be mistyped, or the devices were forgotten on the PC, which makes a new link. Check the Four Eyes Share window on the PC for the current one.</p>`);
+// What an unpaired device sees: a box for the code shown on the PC. note is a line above it
+// (a wrong code, or pairing paused).
+function pairPage(note = '') {
+  return page('Pair with Four Eyes Share', `<h1>Four Eyes Share</h1>
+<p>Type the <b>pairing code</b> shown in the Four Eyes Share window on your PC. You only do this once on each device.</p>
+${note ? `<p class="note">${esc(note)}</p>` : ''}
+<form method="post" action="/pair">
+  <input name="code" inputmode="numeric" pattern="[0-9 ]*" autocomplete="one-time-code" maxlength="8" autofocus required aria-label="Pairing code" placeholder="000000">
+  <button>Pair</button>
+</form>
+<style>form{display:flex;gap:12px;flex-wrap:wrap;margin-top:1em}
+input{font:600 40px/1 ui-monospace,Consolas,monospace;letter-spacing:.25em;width:7.5em;padding:12px 16px;border-radius:10px;border:2px solid #555;background:#000;color:#fff}
+button{font:600 28px system-ui,sans-serif;padding:12px 32px;border-radius:10px;border:0;background:#58a6ff;color:#000}
+.note{color:#ffb4a8}</style>`);
+}
 
-// Limits guessing at the pairing key: after MAX_MISSES wrong keys in a minute, pairing pauses for a minute.
-const MAX_MISSES = 10;
+// Limits guessing at the code: after MAX_MISSES wrong codes within LOCK_MS, pairing pauses for LOCK_MS.
+// With 6 digits that is a million codes at 5 tries per 5 minutes: about a year to try half of them,
+// and each successful pairing makes a new code anyway.
+export const MAX_MISSES = 5;
+const LOCK_MS = 5 * 60_000;
 function missCounter() {
   let misses = [], lockedUntil = 0;
   return {
     locked: (now = Date.now()) => now < lockedUntil,
     miss(now = Date.now()) {
-      misses = misses.filter(t => now - t < 60_000); misses.push(now);
-      if (misses.length >= MAX_MISSES) { lockedUntil = now + 60_000; misses = []; }
+      misses = misses.filter(t => now - t < LOCK_MS); misses.push(now);
+      if (misses.length >= MAX_MISSES) { lockedUntil = now + LOCK_MS; misses = []; }
     },
   };
+}
+
+async function readForm(req) {
+  let body = '';
+  for await (const chunk of req) { body += chunk; if (body.length > 1024) throw new HttpError(413, 'Too big.'); }
+  return new URLSearchParams(body);
 }
 
 // The request handler, separate from the server so tests can drive it. cfg is from loadConfig;
@@ -161,26 +182,34 @@ export function createShareHandler(cfg, assets, { log = () => {} } = {}) {
   const pairing = missCounter();
   return async function handle(req, res) {
     try {
-      if (req.method !== 'GET' && req.method !== 'HEAD') throw new HttpError(405, 'Method not allowed.');
       const url = new URL(req.url, 'https://share.invalid');
       const p = url.pathname;
+      const html = (status, body) => send(res, status, 'text/html; charset=utf-8', body, { 'Cache-Control': 'no-store' });
 
-      // pairing: the key from the control panel trades for a long-lived cookie for this device
-      if (p.startsWith('/pair/')) {
-        if (pairing.locked()) { send(res, 429, 'text/html; charset=utf-8', BAD_KEY); return; }
-        const key = decodeURIComponent(p.slice(6)).trim().toLowerCase();
-        if (!key || key !== cfg.data.pairKey) { pairing.miss(); log('pairing refused'); send(res, 403, 'text/html; charset=utf-8', BAD_KEY); return; }
-        const token = cfg.addDevice(req.headers['user-agent']);
-        log('paired a device: ' + (req.headers['user-agent'] || 'unknown browser'));
+      // pairing: the code from the PC trades for a long-lived cookie for this device. Typed into the
+      // form (POST /pair), or opened as a link from the QR code (GET /pair/<code>).
+      const formPost = p === '/pair' && req.method === 'POST';
+      if (formPost || (p.startsWith('/pair/') && req.method === 'GET')) {
+        // the form must come from this server's own page, not another site's
+        if (formPost && !['same-origin', 'none', undefined].includes(req.headers['sec-fetch-site'])) throw new HttpError(403, 'Forbidden.');
+        const code = formPost ? (await readForm(req)).get('code') : decodeURIComponent(p.slice(6));
+        if (pairing.locked()) { html(429, pairPage('Too many wrong codes. Pairing is paused for a few minutes; try again then.')); return; }
+        const token = cfg.pair(code, req.headers['user-agent']);
+        if (!token) {
+          pairing.miss(); log('pairing refused: wrong code');
+          html(403, pairPage('That code didn\'t work. Check the code on the PC (it changes after each device pairs).')); return;
+        }
+        log('Paired a device (' + (req.headers['user-agent'] || 'unknown browser') + '). Next pairing code: ' + cfg.data.pairCode.slice(0, 3) + ' ' + cfg.data.pairCode.slice(3));
         res.writeHead(303, { ...BASE_HEADERS, Location: '/',
           'Set-Cookie': `${COOKIE}=${token}; Path=/; Max-Age=${COOKIE_DAYS * 86400}; HttpOnly; Secure; SameSite=Strict` });
         res.end(); return;
       }
+      if (req.method !== 'GET' && req.method !== 'HEAD') throw new HttpError(405, 'Method not allowed.');
 
       if (p === '/favicon.ico') { res.writeHead(204, BASE_HEADERS); res.end(); return; } // the page has none; avoid a logged 404
 
       if (!cfg.hasDevice(cookies(req)[COOKIE])) {
-        if (p === '/' || p === '/index.html') { send(res, 401, 'text/html; charset=utf-8', LOCKED); return; }
+        if (p === '/' || p === '/index.html') { html(200, pairPage()); return; } // a normal page, so browsers don't log an error
         throw new HttpError(401, 'This device isn\'t paired.');
       }
 
@@ -247,9 +276,26 @@ async function sendMedia(req, res, cfg, encoded) {
 }
 
 // Start listening on every network interface, so the Quest can reach it over Wi-Fi.
+// One port serves both: HTTPS, and plain HTTP that only redirects to HTTPS. Quest Browser assumes
+// http:// when you type "192.168.1.20:8443", so this way the address works without "https://".
+// The first byte tells them apart: a TLS connection starts with a handshake record (0x16).
 export function startShareServer(cfg, assets, { port = cfg.data.port, host = '0.0.0.0', log } = {}) {
-  const server = https.createServer({ cert: cfg.data.tls.cert, key: cfg.data.tls.key }, createShareHandler(cfg, assets, { log }));
-  server.keepAliveTimeout = 30_000;
+  const secure = https.createServer({ cert: cfg.data.tls.cert, key: cfg.data.tls.key }, createShareHandler(cfg, assets, { log }));
+  secure.keepAliveTimeout = 30_000;
+  const plain = http.createServer((req, res) => {
+    const where = 'https://' + String(req.headers.host || '').replace(/[^\w.:[\]-]/g, '') + '/';
+    res.writeHead(301, { Location: where, 'Content-Type': 'text/plain', 'Cache-Control': 'no-store' });
+    res.end('Four Eyes Share needs https: ' + where);
+  });
+  const server = net.createServer(socket => {
+    socket.once('data', first => {
+      socket.pause(); socket.unshift(first);
+      (first[0] === 0x16 ? secure : plain).emit('connection', socket);
+      process.nextTick(() => socket.resume());
+    });
+    socket.on('error', () => {});
+  });
+  server.on('close', () => { secure.close(); plain.close(); });
   return new Promise((resolve, reject) => {
     server.once('error', reject);
     server.listen(port, host, () => { server.off('error', reject); resolve(server); });

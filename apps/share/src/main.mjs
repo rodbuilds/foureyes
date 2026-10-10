@@ -40,6 +40,23 @@ function openInBrowser(url) {
   execFile(cmd, args, { windowsHide: true }, () => {});
 }
 
+const spaced = code => code.slice(0, 3) + ' ' + code.slice(3);
+
+// Is a Four Eyes Share control panel answering here? (Its state has a pairing code and folders.)
+async function isRunning(panel) {
+  try {
+    const r = await fetch(panel + '/api/state', { signal: AbortSignal.timeout(1500) });
+    const j = await r.json();
+    return r.ok && typeof j.code === 'string' && Array.isArray(j.folders);
+  } catch {
+    return false;
+  }
+}
+async function postToRunning(panel, path, body) {
+  const r = await fetch(panel + path, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Four-Eyes-Share': '1' }, body: JSON.stringify(body) });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'the running copy refused: ' + r.status);
+}
+
 const stamp = () => new Date().toLocaleTimeString();
 const log = msg => console.log(`[${stamp()}] ${msg}`);
 
@@ -49,6 +66,16 @@ async function main() {
   const cfg = loadConfig(o.configDir);
   if (o.port) cfg.data.port = o.port;
   if (o.controlPort) cfg.data.controlPort = o.controlPort;
+  const panel = `http://127.0.0.1:${cfg.data.controlPort}`;
+
+  // Already running? Then running it again is the way back to the panel: hand over any --add
+  // folders to the running copy, open its panel, and leave.
+  if (await isRunning(panel)) {
+    for (const f of o.add) await postToRunning(panel, '/api/folders/add', { path: f });
+    console.log('\n  Four Eyes Share is already running. Opening its control panel: ' + panel + '\n');
+    if (o.open) openInBrowser(panel);
+    return;
+  }
   for (const f of o.add) cfg.addFolder(f);
 
   if (needsNewCertificate(cfg.data.tls)) {
@@ -73,13 +100,13 @@ async function main() {
     share.close();
     throw new Error(e.code === 'EADDRINUSE' ? `Port ${cfg.data.controlPort} is in use. Is Four Eyes Share already running? (Or choose another with --control-port.)` : e.message);
   }
-  const panel = `http://127.0.0.1:${cfg.data.controlPort}`;
   const first = urls()[0];
   console.log(`
   Four Eyes Share is running.
 
-  Control panel (this PC only):  ${panel}
-  On your Quest, open:           ${first ? first + '/pair/' + cfg.data.pairKey : '(no network connection found)'}
+  Control panel (this PC only):  ${panel}   (run Four Eyes Share again to reopen it)
+  On your Quest, go to:          ${first ? first.replace('https://', '') : '(no network connection found)'}
+  Pairing code:                  ${spaced(cfg.data.pairCode)}   (each code pairs one device; the panel shows the next)
   Certificate fingerprint:       ${fingerprint(cfg.data.tls.cert)}
 
   Sharing ${cfg.data.folders.length} folder(s). Close this window to stop sharing.
