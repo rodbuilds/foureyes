@@ -1,12 +1,17 @@
 {
-  "name": "four-eyes",
+  "name": "four-eyes-monorepo",
   "private": true,
-  "description": "Watch up to four videos or photo slideshows side by side in VR.",
+  "description": "Four Eyes (the VR web app) and Four Eyes Share (the PC companion that serves folders to a Quest).",
   "license": "MIT",
+  "workspaces": [
+    "apps/web",
+    "apps/share"
+  ],
   "scripts": {
-    "test": "node --test --test-concurrency=1 --test-timeout=120000 \"tests/*.test.mjs\""
-  },
-  "devDependencies": {
-    "puppeteer-core": "^25.12.0"
+    "test": "npm run test --workspaces",
+    "test:web": "npm run test -w apps/web",
+    "test:share": "npm run test -w apps/share",
+    "share": "npm run start -w apps/share",
+    "build:share": "npm run build -w apps/share"
   }
 }

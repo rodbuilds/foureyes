@@ -7,3 +7,6 @@ desktop.ini
 
 # test tooling
 node_modules/
+
+# Four Eyes Share builds
+apps/share/dist/

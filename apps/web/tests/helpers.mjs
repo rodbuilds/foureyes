@@ -26,30 +26,33 @@ export function findChrome() {
 // Console noise that isn't an app error.
 const NOISE = /GL Driver Message|GPU stall|favicon|Automatic fallback to software WebGL/i;
 
-// Open the app. Returns { page, errors, run(fn, ...args), close() }.
+// Open the app. Returns { page, errors, run(fn, ...args), close() }. url opens it from somewhere other than
+// index.html on disk (the PC Share tests load it from Four Eyes Share, over HTTPS with its own certificate).
 // run() evaluates fn inside the page, where window.FourEyes (F) and window.T are available.
-export async function openApp({ query = 'test', darkMode = false } = {}) {
+export async function openApp({ query = 'test', darkMode = false, url = APP_URL, before } = {}) {
   const browser = await puppeteer.launch({
     executablePath: findChrome(),
     headless: true,
     args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--mute-audio',
            '--autoplay-policy=no-user-gesture-required', '--no-sandbox', '--window-size=1280,900'],
+    acceptInsecureCerts: true, // Four Eyes Share's self-signed certificate
   });
   try {
-    return await startApp(browser, query, darkMode);
+    return await startApp(browser, query, darkMode, url, before);
   } catch (e) {
     await browser.close(); // a page that never starts must not leave Chrome running (it would hang the test run)
     throw e;
   }
 }
 
-async function startApp(browser, query, darkMode) {
+async function startApp(browser, query, darkMode, url, before) {
   const page = await browser.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
   page.on('console', m => { if (m.type() === 'error' && !NOISE.test(m.text())) errors.push(m.text()); });
+  if (before) await before(page); // e.g. pair with Four Eyes Share first
   if (darkMode) await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'dark' }]);
-  await page.goto(APP_URL + (query ? '?' + query : ''), { waitUntil: 'load' });
+  await page.goto(url + (query ? '?' + query : ''), { waitUntil: 'load' });
   await page.waitForFunction(() => document.querySelectorAll('.card').length === 4, { timeout: 30000 });
   if (query.includes('test')) {
     await page.waitForFunction(() => !!window.FourEyes && !window.FourEyes.renderer.getContext().isContextLost(), { timeout: 30000 }); // graphics ready too: headless Chrome reports the context lost for the first moment

@@ -16,7 +16,27 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      # GitHub's Ubuntu runners come with Chrome installed; the tests drive it headless.
+      # GitHub's Ubuntu runners come with Chrome installed; the web tests drive it headless.
+      # Runs both workspaces: apps/web (including PC Share end to end) and apps/share.
       - run: npm test
         env:
           CHROME_PATH: /usr/bin/google-chrome
+
+  # Four Eyes Share as a Windows .exe, kept as a download on the run's page
+  share-exe:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run test:share
+      - run: npm run build:share
+      - uses: actions/upload-artifact@v4
+        with:
+          name: four-eyes-share-windows
+          path: apps/share/dist/four-eyes-share.exe
+          retention-days: 14

@@ -51,12 +51,19 @@ nothing to install and no account, and your files never leave your computer.
 - **Chrome or Edge** on Windows. Other browsers lack WebXR or folder access.
 - Optional: an Xbox controller (wired or Bluetooth).
 
+### On a standalone Quest (experimental): PC Share
+
+Quest Browser can't open folders on a PC. **Four Eyes Share** is a small companion app for the PC
+that serves Four Eyes and the folders you choose to the Quest over your home Wi-Fi. Only devices you
+pair can see them, and nothing leaves your network. The folders show up in the media browser as
+**PC Share** places, and everything else works the same. See [apps/share](apps/share/README.md).
+
 ## Getting started
 
 1. Open Four Eyes in Chrome or Edge on the PC your headset is connected to, with your
    headset's PC app (Oculus, SteamVR…) running.
    - **Hosted:** open the published page (for example on GitHub Pages).
-   - **Locally:** download `index.html` and open it in Chrome.
+   - **Locally:** download `apps/web/index.html` and open it in Chrome.
 2. Under **Media library**, click **Add video folder…** and choose the folders your videos and
    photos are in. You only do this once, because the browser remembers them. After a browser
    restart you may need to click **Reconnect** once.
@@ -139,7 +146,14 @@ Each screen has a two-row bar underneath it:
 
 ## How it's built
 
-One self-contained HTML file with no build step and no server. It uses
+This repository holds two apps (npm workspaces):
+
+| Folder | What it is |
+|---|---|
+| [`apps/web`](apps/web) | Four Eyes itself: `index.html` and its tests |
+| [`apps/share`](apps/share) | Four Eyes Share, the PC companion for PC Share (experimental) |
+
+Four Eyes is one self-contained HTML file with no build step and no server. It uses
 [three.js](https://threejs.org/) (r128, loaded from a CDN) for rendering and WebXR, the
 browser's File System Access API for folder browsing, and the Gamepad API for the Xbox
 controller. Your added folders are remembered in the browser's IndexedDB.
@@ -148,11 +162,13 @@ controller. Your added folders are remembered in the browser's IndexedDB.
 
 The tests open the app in headless Chrome and check layout, Fit all in view, curved screens, crop
 detection, the control bar, settings and the media browser (shuffles and photo sets). They use the
-Chrome already on your computer.
+Chrome already on your computer. From the repository root:
 
 ```sh
 npm install
-npm test
+npm test            # everything
+npm run test:web    # just Four Eyes
+npm run test:share  # just Four Eyes Share
 ```
 
 If Chrome is somewhere unusual, point to it with `CHROME_PATH`. The tests open the page with

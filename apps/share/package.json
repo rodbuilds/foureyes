@@ -1,0 +1,25 @@
+{
+  "name": "@four-eyes/share",
+  "private": true,
+  "description": "Four Eyes Share: serves folders on a PC to Four Eyes on a Quest over the home network.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "four-eyes-share": "src/main.mjs"
+  },
+  "scripts": {
+    "start": "node src/main.mjs",
+    "test": "node --test --test-concurrency=1 \"test/*.test.mjs\"",
+    "build": "node scripts/build.mjs"
+  },
+  "dependencies": {
+    "qrcode-generator": "2.0.4"
+  },
+  "devDependencies": {
+    "@fontsource/barlow": "5.3.0",
+    "@fontsource/barlow-condensed": "5.3.0",
+    "esbuild": "0.28.2",
+    "postject": "1.0.0-alpha.6",
+    "three": "0.128.0"
+  }
+}

@@ -142,6 +142,7 @@ button:disabled{opacity:.5;cursor:not-allowed}
       <input type="file" id="dirInput" webkitdirectory multiple hidden>
     </div>
     <ul id="rootList"></ul>
+    <p id="shareStatus" hidden></p>
   </section>
 
   <div class="slots" id="slots"></div>
@@ -509,6 +510,7 @@ class Slot{
     const e=this.list[this.order[p]];
     this.curFolder=e.folder||null; // set for SHUFFLE ALL items, which come from many folders
     if(e.kind==='image'){ this.curKey=e.key; lib.dirty=true; this.showPhoto(e); return; }
+    if(e.url){ this.autoplay=true; this.loadShared(e); return; }
     try{ const f=await getFile(e); this.autoplay=true; this.loadFile(f,true); }
     catch(err){ this.err('Couldn\'t open '+e.name+': '+(err.message||err)); }
   }
@@ -518,6 +520,13 @@ class Slot{
     if(this.url) URL.revokeObjectURL(this.url);
     this.url=URL.createObjectURL(f); this.name=f.name; this.loaded=false;
     this.video.src=this.url; this.video.load(); this.syncUI();
+  }
+  // a video from PC Share, streamed from the PC (keeps the playlist, like loadFile from a folder)
+  loadShared(e){
+    this.leavePhoto(); this.crop={...NO_CROP}; this.skipTok=(this.skipTok||0)+1;
+    if(this.url){ URL.revokeObjectURL(this.url); this.url=null; }
+    this.name=e.name; this.loaded=false;
+    this.video.src=e.url; this.video.load(); this.syncUI();
   }
   loadURL(u){
     this.list=null; this.sets=null; this.name=u.split('/').pop().split('?')[0]||u; this.loaded=false;
@@ -1066,8 +1075,10 @@ async function entryDate(e){
   if(dates.has(e.key)) return dates.get(e.key);
   let t=0;
   try{
-    if(e.kind==='file'||e.kind==='image') t=(await getFile(e)).lastModified;
+    if(e.mtime!=null) t=e.mtime; // PC Share listings carry the date
+    else if(e.kind==='file'||e.kind==='image') t=(await getFile(e)).lastModified;
     else if(e.vdir) t=vdirLatest(e.vdir);
+    else if(e.remote!=null) t=(await shareGet('api/latest?path='+encodeURIComponent(e.remote))).mtime||0;
     else if(e.handle) t=await dirLatest(e.handle,1);
   }catch(err){}
   dates.set(e.key,t); return t;
@@ -1094,10 +1105,49 @@ async function listDir(d){
       else if(VIDEO_EXT.test(h.name)) out.push({name:h.name,kind:'file',handle:h,key:d.key+'/'+h.name});
       else if(IMAGE_EXT.test(h.name)) out.push({name:h.name,kind:'image',handle:h,key:d.key+'/'+h.name});
     }
+  } else if(d.remote!=null){ // a folder on the PC, through Four Eyes Share
+    const j=await shareGet('api/list?path='+encodeURIComponent(d.remote));
+    for(const c of j.entries){
+      const remote=d.remote+'/'+c.name, key=d.key+'/'+c.name;
+      if(c.kind==='dir') out.push({name:c.name,kind:'dir',remote,key});
+      else if(c.kind==='file'||c.kind==='image') out.push({name:c.name,kind:c.kind,url:shareMediaUrl(remote),mtime:c.mtime,key});
+    }
   } else for(const c of d.vdir.values()) out.push({...c,key:d.key+'/'+c.name});
   return out.sort(byName);
 }
-const getFile=n=>n.file? Promise.resolve(n.file) : n.handle.getFile();
+// PC Share files are fetched whole only where a File is needed (photos); videos stream from their URL.
+async function fetchFile(n){
+  const r=await fetch(n.url); if(!r.ok) throw new Error(r.status===401? 'this headset is no longer paired with the PC' : 'the PC answered '+r.status);
+  return new File([await r.blob()],n.name,{lastModified:n.mtime||0});
+}
+const getFile=n=>n.file? Promise.resolve(n.file) : n.url? fetchFile(n) : n.handle.getFile();
+
+// ----- PC Share: folders on a PC, served by the Four Eyes Share companion app -----
+// Four Eyes Share marks the page it serves with <meta name="four-eyes-share">. Only then does the page
+// ask it for folders; the hosted page never makes these requests. Everything stays on the home network.
+const SHARE=!!document.querySelector('meta[name="four-eyes-share"]');
+async function shareGet(path){
+  const r=await fetch(path,{cache:'no-store'});
+  let body=null; try{ body=await r.json(); }catch(e){}
+  if(!r.ok) throw new Error((body&&body.error)||('the PC answered '+r.status));
+  return body;
+}
+const shareMediaUrl=remote=>'media/'+remote.split('/').map(encodeURIComponent).join('/');
+const shareStatusEl=document.getElementById('shareStatus');
+// (re)read the shared folders; they replace any earlier PC Share roots, keeping the rest
+async function loadShareRoots(){
+  if(!SHARE) return;
+  let j;
+  try{ j=await shareGet('api/share'); }
+  catch(e){ shareStatusEl.hidden=false; shareStatusEl.textContent='Couldn\'t reach Four Eyes Share on the PC: '+(e.message||e)+'. Is it still running?'; return; }
+  const old=new Set(lib.roots.filter(r=>r.share).map(r=>r.node));
+  lib.roots=lib.roots.filter(r=>!r.share).concat(j.folders.map(f=>({id:'pc:'+f.id, name:f.name, perm:'granted', share:true,
+    node:{name:f.name, kind:'dir', remote:f.id, key:'pc:'+f.id}})));
+  if(old.has(lib.path[0])){ const r=lib.roots.find(r=>r.share && r.node.key===lib.path[0].key); if(r) lib.path[0]=r.node; else lib.path=[]; }
+  shareStatusEl.hidden=false;
+  shareStatusEl.textContent=j.folders.length? 'PC Share: '+j.folders.length+' folder'+(j.folders.length>1?'s':'')+' from '+j.name+' (listed with the folders above).'
+    : 'PC Share is connected to '+j.name+', but no folders are shared yet. Add some in the Four Eyes Share window on the PC.';
+}
 // A photo for a screen: {bmp, w, h}, plus .tex once it's on the GPU. Release with disposePhoto.
 // createImageBitmap decodes and resizes off the main thread. Uploading a full-size camera photo
 // (and converting it on the way) blocks the thread that draws every video, which froze them all.
@@ -1186,6 +1236,10 @@ function renderRootList(){
   rootListEl.innerHTML='';
   lib.roots.forEach(r=>{
     const li=document.createElement('li');
+    if(r.share){ // chosen in Four Eyes Share on the PC, and removed there too
+      li.innerHTML='<span class="n"></span><span class="st">on the PC (PC Share)</span>';
+      li.querySelector('.n').textContent=r.name; rootListEl.appendChild(li); return;
+    }
     const st= r.temp? 'this session only' : r.perm==='granted'? 'ready' : 'needs reconnect';
     li.innerHTML=`<span class="n"></span><span class="st">${st}</span>`+(r.perm!=='granted'?'<button data-x="re">Reconnect</button>':'')+'<button data-x="rm">Remove</button>';
     li.querySelector('.n').textContent=r.name;
@@ -1212,6 +1266,7 @@ async function loadRoots(){
       lib.roots.push(mkRoot(v.id,v.name,v.handle,perm));
     }
   }catch(e){}
+  await loadShareRoots();
   renderRootList();
 }
 const dirInput=document.getElementById('dirInput');
@@ -1257,9 +1312,10 @@ function pumpThumbs(){
 function makeThumb(e){ if(e.kind==='image') return photoThumb(e);
   return new Promise(async(res,rej)=>{
     const v=document.createElement('video'); let url;
-    const done=(r,err)=>{ clearTimeout(to); v.removeAttribute('src'); v.load(); if(url) URL.revokeObjectURL(url); err? rej(err) : res(r); };
+    const done=(r,err)=>{ clearTimeout(to); v.removeAttribute('src'); v.load(); if(url && !e.url) URL.revokeObjectURL(url); err? rej(err) : res(r); };
     const to=setTimeout(()=>done(null,new Error('timeout')),12000);
-    try{ url=URL.createObjectURL(await getFile(e)); }catch(err){ return done(null,err); }
+    if(e.url) url=e.url; // PC Share: read just the parts needed, straight from the PC
+    else try{ url=URL.createObjectURL(await getFile(e)); }catch(err){ return done(null,err); }
     let dur=0;
     v.muted=true; v.preload='auto';
     v.onloadedmetadata=()=>{ dur=isFinite(v.duration)? v.duration : 0; v.currentTime = dur? Math.min(dur*0.2,300) : 1; };
@@ -1286,7 +1342,8 @@ async function refreshDir(){
   const gen=++lib.gen; lib.page=0; lib.note=''; clearThumbQ();
   if(!lib.path.length){
     lib.entries=lib.roots.map(r=>({name:r.name,kind:'dir',root:r,key:'root:'+r.id}));
-    lib.msg=lib.roots.length? '' : 'No video folders yet.\nTake off the headset, click "Add video folder…" on the page\nand choose the folder your videos are in. You only do this once.';
+    lib.msg=lib.roots.length? '' : SHARE? 'No folders shared yet.\nOn the PC, add folders in the Four Eyes Share window,\nthen press ↻ here.'
+      : 'No video folders yet.\nTake off the headset, click "Add video folder…" on the page\nand choose the folder your videos are in. You only do this once.';
     restorePage(); lib.dirty=true; return;
   }
   lib.entries=[]; lib.msg='Reading folder…'; lib.dirty=true;
@@ -1400,7 +1457,7 @@ async function shuffleAll(){
 function refreshLibrary(){
   if(gathering) return;
   treeCache.clear(); dates.clear(); clearThumbQ(); thumbs.clear();
-  refreshDir().then(()=>{ lib.note='Refreshed: folders will be read again'; lib.dirty=true; });
+  loadShareRoots().then(()=>{ if(SHARE) renderRootList(); return refreshDir(); }).then(()=>{ lib.note='Refreshed: folders will be read again'; lib.dirty=true; });
 }
 function browserClick(b){
   switch(b.id){
@@ -1514,7 +1571,7 @@ function drawPanel(){
   btn('home','⌂  Places',40,146,177,70,{on:!settings && !lib.path.length,left:true,font:'600 30px '+BODY});
   btn('settings','⚙  Settings',227,146,177,70,{on:settings,left:true,font:'600 30px '+BODY});
   lib.roots.slice(0,5).forEach((r,i)=>
-    btn('root',(r.perm!=='granted'&&!r.temp? '⚠ ':'')+r.name,40,226+i*80,364,70,{data:i,on:lib.path[0]===r.node,left:true,font:'600 30px '+BODY}));
+    btn('root',(r.share? 'PC · ' : r.perm!=='granted'&&!r.temp? '⚠ ':'')+r.name,40,226+i*80,364,70,{data:i,on:lib.path[0]===r.node,left:true,font:'600 30px '+BODY}));
   label('LOAD TO SCREEN',40,680);
   for(let i=0;i<4;i++) btn('target',String(i+1),40+i*94,704,84,76,{data:i,on:lib.target===i,color:SLOT_COLORS_DARK[i],dis:!slots[i].group.visible});
   label('FORMAT',40,822);
@@ -1560,7 +1617,7 @@ function drawPanel(){
     c.textAlign='left'; c.textBaseline='alphabetic';
     c.fillStyle='#e9e8f2'; c.font='600 32px '+BODY; c.fillText(fit(c,e.name.replace(VIDEO_EXT,''),tw-8),tx+4,ty+th+44);
     c.fillStyle='#9a9eb9'; c.font='500 24px '+BODY;
-    const sub= e.root? (e.root.perm!=='granted'&&!e.root.temp? 'Press A to reconnect' : 'Folder')
+    const sub= e.root? (e.root.share? 'PC Share' : e.root.perm!=='granted'&&!e.root.temp? 'Press A to reconnect' : 'Folder')
       : e.kind==='dir'? 'Folder'+dateTag(e) : (t&&t.w? t.w+'×'+t.h+'  ·  ' : '')+e.name.split('.').pop().toUpperCase()+dateTag(e);
     c.fillText(fit(c,sub,tw-8),tx+4,ty+th+78);
     if(hov){ c.strokeStyle=acc; c.lineWidth=6; rr(c,x+3,y+3,TW-6,TH-6,16); c.stroke(); }
@@ -1939,7 +1996,7 @@ if(new URLSearchParams(location.search).has("test")) window.FourEyes={
   applyLayout, arrange, fitInView, layoutSpan, topAngle, visible, screenAngle, sizeTo,
   bendScreen, setUV, findBorders, raycastFrom, activate, swapScreens,
   openBrowser, closeBrowser, browserClick, refreshDir, drawPanel, gatherTree, shuffleAll, setSetting, stepPhotoSecs,
-  resetPrefs, PREFS_KEY, refreshLibrary, renderer, photoTexture, uploads, UPLOAD_ROWS, decodeImage, PHOTO_AHEAD, updateFocus, focus:{ get:()=>focusSlot, set:s=>{ focusSlot=focusCand=s; } },
+  resetPrefs, PREFS_KEY, refreshLibrary, loadShareRoots, SHARE, thumbs, renderer, photoTexture, uploads, UPLOAD_ROWS, decodeImage, PHOTO_AHEAD, updateFocus, focus:{ get:()=>focusSlot, set:s=>{ focusSlot=focusCand=s; } },
   layout:()=>layout, eyeY:()=>eyeY, setEye:v=>{ eyeY=v; needArrange=true; }, barButtons:()=>barButtons, photoSecs:()=>photoSecs,
 };
 })();

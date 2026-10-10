@@ -1,0 +1,12 @@
+{
+  "name": "@four-eyes/web",
+  "private": true,
+  "description": "Watch up to four videos or photo slideshows side by side in VR.",
+  "license": "MIT",
+  "scripts": {
+    "test": "node --test --test-concurrency=1 --test-timeout=120000 \"tests/*.test.mjs\""
+  },
+  "devDependencies": {
+    "puppeteer-core": "^25.12.0"
+  }
+}
