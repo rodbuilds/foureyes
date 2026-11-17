@@ -3,7 +3,7 @@
 **A free VR player for watching multiple videos at once.** Watch up to four flat or 3D (SBS)
 videos or photo slideshows side by side in VR, each on its own screen with its own controls.
 
-**[Open Four Eyes](https://rodbuilds.github.io/foureyes/)** in Chrome or Edge, with a Meta Quest
+**[Open Four Eyes](https://foureyesvr.com/)** in Chrome or Edge, with a Meta Quest
 (Link / Air Link), Rift or SteamVR headset.
 
 Four Eyes is a single web page. Open it in Chrome or Edge on a PC with a VR headset, press

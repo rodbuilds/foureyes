@@ -1,4 +1,4 @@
-# Publishes Four Eyes to GitHub Pages at https://rodbuilds.github.io/foureyes/.
+# Publishes Four Eyes to GitHub Pages, served at https://foureyesvr.com/ (custom domain, set in Settings → Pages).
 # The page is apps/web/index.html in the monorepo layout, or index.html at the root before it; either
 # works, so this file is right on both sides of that move.
 #
